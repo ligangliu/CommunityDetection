@@ -92,15 +92,15 @@ Newman M E J, Girvan M. Finding and evaluating community structure in networks[J
   [4]: https://sikasjc.coding.me/2017/12/20/GN/
   [5]: https://sikasjc.github.io/2018/04/28/weighted_GN/
   [6]: https://en.wikipedia.org/wiki/Girvan%E2%80%93Newman_algorithm
-  [7]: http://ormnbkvfv.bkt.clouddn.com/18-1-21/79561109.jpg
-  [8]: http://ormnbkvfv.bkt.clouddn.com/18-1-21/17264809.jpg
-  [9]: http://ormnbkvfv.bkt.clouddn.com/18-4-27/75989614.jpg
-  [10]: http://ormnbkvfv.bkt.clouddn.com/18-4-27/8315054.jpg
+  [7]: https://i.postimg.cc/X7GXdNws/79561109.png
+  [8]: https://i.postimg.cc/x8q8snBT/17264809.png
+  [9]: https://i.postimg.cc/fRv3T27s/75989614.png
+  [10]: https://i.postimg.cc/m2CzK2tt/8315054.png
   [11]: https://en.wikipedia.org/wiki/Community_structure
   [12]: https://sikasjc.coding.me/2017/12/20/GN/
   [13]: https://sikasjc.github.io/2018/04/28/weighted_GN/
   [14]: https://en.wikipedia.org/wiki/Girvan%E2%80%93Newman_algorithm
-  [15]: http://ormnbkvfv.bkt.clouddn.com/18-1-21/79561109.jpg
-  [16]: http://ormnbkvfv.bkt.clouddn.com/18-1-21/17264809.jpg
-  [17]: http://ormnbkvfv.bkt.clouddn.com/18-4-27/75989614.jpg
-  [18]: http://ormnbkvfv.bkt.clouddn.com/18-4-27/8315054.jpg
+  [15]: https://i.postimg.cc/X7GXdNws/79561109.png
+  [16]: https://i.postimg.cc/x8q8snBT/17264809.png
+  [17]: https://i.postimg.cc/fRv3T27s/75989614.png
+  [18]: https://i.postimg.cc/m2CzK2tt/8315054.png
