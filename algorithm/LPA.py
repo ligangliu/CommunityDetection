@@ -9,7 +9,7 @@ paper : <<Near linear time algorithm to detect community structures in large-sca
 '''
 
 
-class LPA():
+class LPA(object):
 
     def __init__(self, G, max_iter=20):
         self._G = G

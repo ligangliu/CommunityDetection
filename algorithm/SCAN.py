@@ -31,7 +31,7 @@ def cal_similarity(G, node_i, node_j):
     return len(s1 & s2) / math.sqrt(len(s1) * len(s2))
 
 
-class SCAN():
+class SCAN(object):
 
     def __init__(self, G, epsilon=0.5, mu=3):
         self._G = G

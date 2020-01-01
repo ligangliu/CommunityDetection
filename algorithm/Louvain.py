@@ -22,7 +22,7 @@ def load_graph(path):
     return G
 
 
-class Vertex():
+class Vertex(object):
 
     def __init__(self, vid, cid, nodes, k_in=0):
         self._vid = vid
@@ -31,7 +31,7 @@ class Vertex():
         self._kin = k_in  # 结点内部的边的权重
 
 
-class Louvain():
+class Louvain(object):
 
     def __init__(self, G):
         self._G = G

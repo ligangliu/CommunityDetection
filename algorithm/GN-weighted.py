@@ -79,7 +79,7 @@ class GN_w:
         nx.set_node_attributes(self.G_copy, nodegroup)
 
     def to_gml(self):
-        nx.write_gml(self.G_copy, 'outputofGN_weighted.gml')
+        nx.write_gml(self.G_copy, '../datasets/outputofGN_weighted.gml')
 
     # Computing the Q
     def cal_Q(self, partition, G):

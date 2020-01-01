@@ -125,7 +125,7 @@ class GN:
         nx.set_node_attributes(self.G_copy, nodegroup)
 
     def to_gml(self):
-        nx.write_gml(self.G_copy, 'outputofGN.gml')
+        nx.write_gml(self.G_copy, '../datasets/outputofGN.gml')
 
 
 if __name__ == '__main__':
