@@ -10,6 +10,7 @@ sys.path.append('../')
     paper:<<Community structure in social and biological networks>>
 '''
 
+# igraph
 # /Users/liuligang/Library/ApplicationSupport
 # https://sikasjc.coding.me/2017/12/20/GN/
 class GN:

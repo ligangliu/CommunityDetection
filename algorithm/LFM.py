@@ -7,7 +7,7 @@ import networkx as nx
 '''
 
 
-class Community():
+class Community(object):
     ''' use set operation to optimize calculation '''
 
     def __init__(self, G, alpha=1.0):
@@ -75,7 +75,7 @@ class Community():
         return float(self._k_in) / ((self._k_in + self._k_out) ** self._alpha)
 
 
-class LFM():
+class LFM(object):
 
     def __init__(self, G, alpha):
         self._G = G
