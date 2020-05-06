@@ -9,10 +9,15 @@ sys.path.append('../')
 '''
     paper:<<Community structure in social and biological networks>>
 '''
+'''
+GN 算法的思想：
+    1. 涉及到的知识 a: 介数和边介数  边: 模块度函数Q
+    2. 算法步骤
+        1）计算网络中所有所有边的边介数
+        2）删除上一步计算出来的最大边介数
+        3）重复步骤2，直到每一个节点成为一个独立的社团，即网络中不存在边
+'''
 
-# igraph
-# /Users/liuligang/Library/ApplicationSupport
-# https://sikasjc.coding.me/2017/12/20/GN/
 class GN:
     def __init__(self, G):
         self.G_copy = G.copy()
@@ -21,10 +26,9 @@ class GN:
         self.all_Q = [0.0]
         self.max_Q = 0.0
 
-    # Using max_Q to divide communities
     def run(self):
-        # Until there is no edge in the graph
         while len(self.G.edges()) != 0:
+            # nx.edge_betweenness_centrality 返回的是类似于 {('C', 'F'): 0.4} 这种结构
             # 计算每天边界数，寻找边届数最大的边
             edge = max(nx.edge_betweenness_centrality(self.G).items(), key=lambda item: item[1])[0]
             # 移除边界数最大的边
@@ -33,9 +37,11 @@ class GN:
             components = [list(c) for c in list(nx.connected_components(self.G))]
             if len(components) != len(self.partition):
                 # compute the Q
+                # nx.algorithms.community.modularity(self.G_copy, components) 可以直接调用networkx的库函数 等价于 call_Q()
                 cur_Q = self.cal_Q(components, self.G_copy)
                 if cur_Q not in self.all_Q:
                     self.all_Q.append(cur_Q)
+                    # 还可以在这一步做一个map换成call_Q与components的关系
                 if cur_Q > self.max_Q:
                     self.max_Q = cur_Q
                     self.partition = components
@@ -46,13 +52,14 @@ class GN:
         print('Max_Q:', self.max_Q)
         return self.partition, self.all_Q, self.max_Q
 
-    # Dividing communities by number
+    # Dividing communities by number  划分成具体的个数的社区
     def run_n(self, k):
         while len(self.G.edges()) != 0:
             edge = max(nx.edge_betweenness_centrality(self.G).items(), key=lambda item: item[1])[0]
             self.G.remove_edge(edge[0], edge[1])
             components = [list(c) for c in list(nx.connected_components(self.G))]
             if len(components) <= k:
+                # cur_Q = nx.algorithms.community.modularity(self.G_copy, components)
                 cur_Q = self.cal_Q(components, self.G_copy)
                 if cur_Q not in self.all_Q:
                     self.all_Q.append(cur_Q)
@@ -88,7 +95,7 @@ class GN:
         plt.xticks(my_x_ticks)
         plt.axvline(len(self.partition), color='black', linestyle="--")
         plt.axvline(2, color='black', linestyle="--")
-        # plt.axhline(self.all_Q[3],color='red',linestyle="--")
+        plt.axhline(self.all_Q[3], color='red', linestyle="--")
         plt.show()
 
     # Computing the Q
@@ -123,29 +130,40 @@ class GN:
             for node in partition:
                 nodegroup[node] = {'group': num}
             num = num + 1
+        # 为每一个节点增加了一个group的属性
         nx.set_node_attributes(self.G_copy, nodegroup)
 
     def to_gml(self):
+        # note: 这里用的是G_copy 并不是G  因为原图G是在不停的删除边的
+        # 在add_group 中已经为图中的节点添加了分组信息
         nx.write_gml(self.G_copy, '../datasets/outputofGN.gml')
 
 
 if __name__ == '__main__':
     G = nx.read_gml('../datasets/karate.gml', label='id')  # Using max_Q to divide communities
+    # from modularity_maximization import partition
+    # print partition(G)
+    # print "---"*20
+    nx.write_edgelist(G, "../datasets/temp.txt")
     algorithm = GN(G)
     algorithm.run()
-    algorithm.draw_Q()
+    # algorithm.draw_Q()
     algorithm.add_group()
-    algorithm.to_gml()
+    # print "---------"
+    # print list(algorithm.G_copy.nodes(data=True))
+    # print algorithm.partition
+    # algorithm.to_gml()
 
-    G1 = nx.read_gml('../datasets/karate.gml', label='id')  # Dividing communities by the number
-    algorithmByNum = GN(G1)
-    algorithmByNum.run_n(2)
+    # G1 = nx.read_gml('../datasets/karate.gml', label='id')  # Dividing communities by the number
+    # algorithmByNum = GN(G1)
+    # algorithmByNum.run_n(3)
 
     G2 = nx.read_gml('../datasets/karate.gml',
                      label='id')  # Dividing communities until each node is a community
+
     algorithmtoOne = GN(G2)
     some = algorithmtoOne.run_to_all()
-    print('-----------the result of each division, until each node is a community----------')
+    print '-----------the result of each division, until each node is a community----------'
     for i in range(1, len(G.nodes()) + 1):
-        print('\n划分成{0}个社区：Q值为{1}'.format(i, some[1][i - 1]))
-        print(some[0][i - 1])
+        print '\n划分成{0}个社区：Q值为{1}'.format(i, some[1][i - 1])
+        print some[0][i - 1]

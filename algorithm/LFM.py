@@ -4,6 +4,8 @@ import networkx as nx
 
 '''
     paper:<<Detecting the overlapping and hierarchical community structure in complex networks>>
+    https://www.jianshu.com/p/19c7cf839b2a
+    有点类似于GN算法，贪婪算法
 '''
 
 
@@ -14,8 +16,8 @@ class Community(object):
         self._G = G
         self._alpha = alpha
         self._nodes = set()
-        self._k_in = 0
-        self._k_out = 0
+        self._k_in = 0  # 社区节点内部的度数，也就是内部边的2倍
+        self._k_out = 0  # 与外部节点相连的度数
 
     def add_node(self, node):
         neighbors = set(self._G.neighbors(node))
@@ -25,7 +27,7 @@ class Community(object):
         self._k_in += 2 * node_k_in
         self._k_out = self._k_out + node_k_out - node_k_in
 
-    def remove_vertex(self, node):
+    def remove_node(self, node):
         neighbors = set(self._G.neighbors(node))
         community_nodes = self._nodes
         node_k_in = len(neighbors & community_nodes)
@@ -86,10 +88,11 @@ class LFM(object):
         node_not_include = self._G.node.keys()[:]
         while (len(node_not_include) != 0):
             c = Community(self._G, self._alpha)
-            # randomly select a seed node
+            # 随机选择一个种子，个人感觉这里可以拓展，类似于拓展LPA标签传播算法？？？
             seed = random.choice(node_not_include)
             c.add_node(seed)
 
+            # 得到社区内所有节点的邻居节点
             to_be_examined = c.get_neighbors()
             while (to_be_examined):
                 # largest fitness to be added
@@ -119,7 +122,10 @@ class LFM(object):
 
 
 if __name__ == "__main__":
-    G = nx.karate_club_graph()
+    # G = nx.karate_club_graph()
+    G = nx.Graph()
+    G.add_edges_from([(1, 2), (1, 3), (1, 4), (2, 3), (3, 4), (4, 5), (4, 6),
+                      (5, 6), (5, 7), (5, 8), (6, 7), (6, 8), (7, 8), (7, 9)])
     algorithm = LFM(G, 0.8)
     communities = algorithm.execute()
     for c in communities:

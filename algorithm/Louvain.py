@@ -4,14 +4,29 @@
 import collections
 import string
 import random
+import networkx as nx
+from CommunityDetection.evaluation.Modularity import cal_Q
 
 '''
     paper : <<Fast unfolding of communities in large networks>>
+    Louvain算法核心：优化关系图模块度目标
+    1）算法扫描数据中的所有节点，针对每个节点遍历该节点的所有邻居节点，衡量把该节点加入其邻居节点
+       所在社区所带来的模块度的收益。并选择对应最大收益的邻居节点，加入所在的社区。
+       这一过程化重复进行指导每一个节点的社区归属都不再发生变化
+    2）对步骤1中形成的社区进行折叠，把每个社区折叠成一个单点，分别计算这些新生成的“社区点”
+       之间的连边权重，以及社区内的所有点之间的连边权重之和。用于下一轮的步骤1。
+    
+    模块度：首先modularity是针对一个社区的所有节点进行了累加计算。
+    modularity Q的计算公式背后体现了这种思想：社区内部边的权重减去所有与社区节点相连的边的权重和，
+    对无向图更好理解，即社区内部边的度数减去社区内节点的总度数。
+    可以直观去想象一下，如果一个社区节点完全是“封闭的
+    （即所有节点都互相内部连接，但是不和社区外部其他节点有连接，则modularity公式的计算结果为1）”
+    https://www.cnblogs.com/LittleHann/p/9078909.html
 '''
-
 
 def load_graph(path):
     G = collections.defaultdict(dict)
+    G_1 = nx.Graph()
     with open(path) as text:
         for line in text:
             vertices = line.strip().split()
@@ -19,14 +34,29 @@ def load_graph(path):
             v_j = string.atoi(vertices[1])
             G[v_i][v_j] = 1.0
             G[v_j][v_i] = 1.0
-    return G
+            G_1.add_edge(v_i, v_j, weight=1.0)
+    return G, G_1
+
+
+def add_group(G_1, communities):
+    num = 0
+    nodegroup = {}
+    for community in communities:
+        for node in community:
+            nodegroup[node] = {'group': num}
+        num = num + 1
+    nx.set_node_attributes(G_1, nodegroup)
+
+
+def to_gml(G_1, path):
+    nx.write_gml(G_1, path)
 
 
 class Vertex(object):
 
     def __init__(self, vid, cid, nodes, k_in=0):
-        self._vid = vid
-        self._cid = cid
+        self._vid = vid # 节点id
+        self._cid = cid # 节点所属社区id
         self._nodes = nodes
         self._kin = k_in  # 结点内部的边的权重
 
@@ -137,8 +167,14 @@ class Louvain(object):
 
 
 if __name__ == '__main__':
-    G = load_graph('../datasets/lv.txt')
+    G, G_1 = load_graph('../datasets/temp.txt')
     algorithm = Louvain(G)
     communities = algorithm.execute()
     for c in communities:
         print c
+    # add_group(G_1, communities)
+    # path = "../datasets/outputofLouvain.gml"
+    # to_gml(G_1, path)
+    # communities = [list(c) for c in communities]
+    # print cal_Q(communities, G_1)
+    # print modularity(communities, G_1)
