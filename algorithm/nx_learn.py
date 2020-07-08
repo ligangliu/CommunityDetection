@@ -84,3 +84,6 @@ copy_graph = nx.create_empty_copy(G)
 print copy_graph.nodes(data=True)
 print copy_graph.edges(data=True)
 
+G = nx.DiGraph()
+G.add_edges_from(((1,2), (1,3), (3,1), (3,2), (3,5), (4,5), (4,6),
+                  (5,4), (5,6), (6,4)))

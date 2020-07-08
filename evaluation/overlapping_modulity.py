@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 from collections import defaultdict
+import networkx as nx
 
 """
+    https://blog.csdn.net/wangyibo0201/article/details/52048248
     paper:<<Detect overlapping and hierarchical community structure in networks>>
     G:vertex-neighbors {vertex:list(neighbors)}
 """
 
 def cal_EQ(cover, G):
-    vertex_community = defaultdict(lambda:set())
+    vertex_community = defaultdict(lambda: set())
     for i, c in enumerate(cover):
         for v in c:
             vertex_community[v].add(i)
@@ -37,4 +39,10 @@ def cal_EQ(cover, G):
                 else:
                     total += 2*t
 
-    return round(total/(2*m),4)
+    return round(total/(2*m), 4)
+
+
+if __name__=='__main__':
+    G = nx.barbell_graph(3, 0)
+    print cal_EQ([[0, 1, 2], [3, 4, 5]], G)
+    print nx.algorithms.community.modularity(G, [{0, 1, 2}, {3, 4, 5}])

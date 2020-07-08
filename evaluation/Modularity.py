@@ -5,6 +5,7 @@ import networkx as nx
 # Computing the Q
 
 '''
+https://blog.csdn.net/wangyibo0201/article/details/52048248
 模块度的取值应在0-1之间，Q值越大说明网络划分的社区结构准确度越高
 from networkx.algorithms.community.quality import modularity, performance
 print modularity(G, partition)

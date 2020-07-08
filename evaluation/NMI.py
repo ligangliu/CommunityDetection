@@ -3,6 +3,8 @@
 import numpy as np
 import math
 
+from sklearn import metrics
+
 '''
      https://www.cnblogs.com/ziqiao/archive/2011/12/13/2286273.html
      例子：
@@ -87,9 +89,8 @@ def NMI_2(com, real_com):
 
 
 if __name__ == '__main__':
-    # AA = np.array([1, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 1, 1, 3, 3, 3])
-    # B = np.array([1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3])
-    C = np.array([1, 2, 1])
-    B = np.array([2, 1, 4])
-    print NMI(C, B)  # 0.364561771857
-    print NMI_2(C, B)
+    A = np.array([1, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 1, 1, 3, 3, 3])
+    B = np.array([1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3])
+    print NMI(A, B)  # 0.364561771857
+    print NMI_2(A, B)
+    print metrics.normalized_mutual_info_score(A, B, average_method='arithmetic')

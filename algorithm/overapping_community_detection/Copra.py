@@ -227,7 +227,7 @@ if __name__ == '__main__':
     # vertices = [34,115,105,62]
     # txtlist = ['karate.txt','football.txt','books.txt','dolphins.txt']
     vertices = [64, 128, 256, 512]
-    txtlist = ['RN1.txt', 'RN2.txt', 'RN3.txt', 'RN4.txt']
+    txtlist = ['a.txt']
     testv = [2, 3, 4, 5]
     for i in range(len(txtlist)):
         print txtlist[i], vertices[i]
