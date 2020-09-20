@@ -5,7 +5,7 @@ import collections
 import string
 import random
 import networkx as nx
-from CommunityDetection.evaluation.Modularity import cal_Q
+# from CommunityDetection.evaluation.Modularity import cal_Q
 
 '''
     paper : <<Fast unfolding of communities in large networks>>

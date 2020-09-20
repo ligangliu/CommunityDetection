@@ -44,5 +44,6 @@ print nx.betweenness_centrality(G)
 print nx.edge_betweenness_centrality(G)
 for x in nx.connected_components(G):
     print x
-from modularity_maximization import partition
-print partition(G)
+
+# from modularity_maximization import partition
+# print partition(G)

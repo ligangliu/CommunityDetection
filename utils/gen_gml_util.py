@@ -14,10 +14,13 @@ import networkx as nx
 # nx.draw_networkx_labels(G, pos, labels=node_groups)
 # node_labels = {}
 # plt.show()
-G = nx.read_gml("../datasets/dolphins.gml", label="id")
+G = nx.read_gml("../datasets/karate.gml", label="id")
 print G.nodes(data=True)
-node_groups = nx.get_node_attributes(G, 'value')
-print node_groups
+print len(G.edges)
+for edge in G.edges:
+    print edge
+# node_groups = nx.get_node_attributes(G, 'value')
+# print node_groups
 # print list(G.nodes)
 # print list(G.edges)
 # def clone_graph(G):

@@ -46,6 +46,7 @@ import csv
 import sys
 import networkx as nx
 from networkx.generators.community import LFR_benchmark_graph
+
 n = 250
 tau1 = 3
 tau2 = 1.5

@@ -109,7 +109,7 @@ The program will produce three files:
 
 1. Network file `Network.<nsl>` contains the list of edges (nodes are labelled from 1 to the number of nodes; the edges are ordered and repeated twice for `nsa` format and unordered (not repeated) for the `nse` format, i.e. source-target and target-source), with the relative weight. The [NSL format](https://github.com/eXascaleInfolab/PyCABeM/blob/master/formats/format.nsl), the network specified by <links> (arcs / edges), is a generalization of the .snap, .ncol and Edge/Arcs Graph formats.
 1. Community file `Network.nmc` contains a list of the nodes and their membership (memberships are labeled by integer numbers >=1).
-1. Statistics file `Network.nst` contains the degree distribution (in logarithmic bins), the community size distribution, the distribution of the mixing parameter for the topology and the weights, and the internal and external weight distribution.
+1. Statistics file `Network.nst` contains a list of the nodes and their membership (memberships are labeled by integer numbers >=1)contains the degree distribution (in logarithmic bins), the community size distribution, the distribution of the mixing parameter for the topology and the weights, and the internal and external weight distribution.
 
 ## Acknowledgement
 Thanks to:
