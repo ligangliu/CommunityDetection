@@ -11,11 +11,14 @@ import math
 import numpy as np
 
 G = nx.Graph()
-G.add_edges_from([(1, 2), (1, 3), (1, 4), (1, 8),
-                  (2, 3), (2, 4),
-                  (3, 5), (3, 6), (3, 7),
-                  (4, 5), (4, 7), (4, 9), (4, 10),
-                  (5, 7)], weight=1.0)
+# G.add_edges_from([(1, 2), (1, 3), (1, 4), (1, 8),
+#                   (2, 3), (2, 4),
+#                   (3, 5), (3, 6), (3, 7),
+#                   (4, 5), (4, 7), (4, 9), (4, 10),
+#                   (5, 7)], weight=1.0)
+G = nx.read_gml("../datasets/karate.gml", label="id")
+for edge in G.edges:
+    G[edge[0]][edge[1]]['weight'] = 1.0
 
 # 1) Distance function
 a = 0.001
@@ -37,7 +40,7 @@ def calculate_cc_ij(nodei, nodej):
     V_ij = nx.common_neighbors(G, nodei, nodej)
     maxw = calculate_maxw()
     t = 0.5
-    r = 1.0  # 暂定1.0，没有弄明白论文中的r所指的意思?????
+    r = 1.0  # 暂定1.0，todo 没有弄明白论文中的r所指的意思?????
     res = 0.0
     for node in V_ij:
         w_ipj = min(G[nodei][node]['weight'], G[nodej][node]['weight'])
@@ -124,10 +127,12 @@ class NodeInfo(object):
         self.node_g_1 = 0.0  # 表示的归一化之后的伽马
         self.node_r = 0.0  # 表示的就是归一化之后的揉*伽马
         self.node_dr = 0.0
+        self.is_center_node = False  # 表示该节点是否为中心节点，默认都不是，因为中心节点是需要选出来的
+        self.is_enveloped_node = False  # 是否为包络节点（讲道理，这里是不是定义为是否为重叠节点更加合适？论文是这么定义的）
+        self.communities = []  # 表示每个节点划分的社区编号，因为是重叠社区，一个节点可能隶属多个社区
 
-    # 计算每个节点的揉
 
-
+# 计算每个节点的揉
 def calculate_nodep(node, knn):
     dc = 0.5
     node_neighbors = nx.neighbors(G, node)
@@ -168,6 +173,7 @@ def init_all_nodes_info():
         node_info.node_p_1 = (node_p - min_node_p) / (max_node_p - min_node_p)
 
     # 3) 初始化所有节点的伽马
+    # 计算每个节点的伽马函数，由于这个方法外部不会调用，就暂且定义在方法内部吧，问题不大！
     def calculate_node_g(nodei, node_list):
         temp = []
         for nodej in node_list:
@@ -186,7 +192,7 @@ def init_all_nodes_info():
             node_info = res[i]
             node = node_info.node
             # 因为res是根据揉排好序的，所有i之后的所有节点对应的揉都是大于当前的
-            node_list = [res[x].node for x in range(i, len(res))]
+            node_list = [res[x].node for x in range(i + 1, len(res))]
             node_g = calculate_node_g(node, node_list)
             all_node_g.append(node_g)
             node_info.node_g = node_g
@@ -205,11 +211,82 @@ def init_all_nodes_info():
 all_nodes_info_list = init_all_nodes_info()
 
 
+# 讲道理这里应该还需要过滤一些更不不可能成为clustering node的节点，暂未实现
+def filter_corredpond_nodes(all_nodes_info_list):
+    pass
+
+
+# 按照node_r进行排序
+all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_r)
+
+
+# 初始化所有的节点的node_dr信息，并返回最大的node_dr以及对应的index
+def init_all_nodes_dr():
+    # 第一个节点应该是没有node_dr的，所以从第二个节点开始
+    for i in range(1, len(all_nodes_info_list)):
+        a = all_nodes_info_list[i - 1]
+        b = all_nodes_info_list[i]
+        node_dr = b.node_r - a.node_r
+        b.node_dr = node_dr
+
+
+# 初始化所有节点的d伽马
+init_all_nodes_dr()
+
+
+# ================================================================================
+# 以上的所有代码应该是初始化好了所有的节点的信息，
+# 包括揉，伽马，还有d伽马等信息。那么讲道理下面的步骤就应该是自动计算中心节点
+# 以及将节点划分到对应的社区
+# ================================================================================
+
 # 得到一维的线性拟合的参数a和b
-def calculate_linear_fitting_number(list_x, list_y, n):
+def calculate_predict_node_dr(node_info_list, true_node_dr):
+    list_x = []
+    list_y = []
+    for i in range(len(node_info_list)):
+        node_info = node_info_list[i]
+        list_x.append(i + 1)
+        list_y.append(node_info.node_dr)
     z = np.polyfit(list_x, list_y, 1)
-    return z[0] * n + z[1]
+    return z[0] * true_node_dr + z[1]
+
 
 # list_x = [1, 2, 3, 4, 5, 6]
 # list_y = [2.5, 3.51, 4.45, 5.52, 6.47, 7.51]
 # print calculate_linear_fitting_number(list_x, list_y, 8)
+
+# 算法二的核心，自动计算出node center
+def selec_center(node_info_list):
+    def max_node_dr(node_info_list):
+        max_index = -1
+        max_node_dr = -1
+        for i in range(1, len(node_info_list)):
+            node_info = node_info_list[i];
+            t = node_info.node_dr
+            if max_node_dr < t:
+                max_node_dr = t
+                max_index = i
+        return max_node_dr, max_index
+
+    res = -1
+    # 这里的循环的过程不就会导致一种结果，那就是只要某个max_index是center，
+    # 那么之后的所有节点不就肯定都是啦？？？
+    # todo 反正论文上的重复逻辑没有看懂，不知道是不是我代码所写的这个意思，需要讨论一下？？？？
+    while len(node_info_list) > 3:
+        _, max_index = max_node_dr(node_info_list)
+        temp_node_info = node_info_list[max_index]
+        true_node_dr = temp_node_info.node_dr
+        # 将所有的前面的进行你和
+        node_info_list = node_info_list[1:max_index]
+        predict_node_dr = calculate_predict_node_dr(node_info_list, true_node_dr)
+        # todo 这么定义和论文不一样，到时候一起讨论一下？？？？
+        if 2 * (true_node_dr - predict_node_dr) > true_node_dr:
+            res = max_index
+        else:
+            break
+    return res
+
+
+res = selec_center(all_nodes_info_list)
+print res
