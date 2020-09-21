@@ -9,6 +9,7 @@
 import networkx as nx
 import math
 import numpy as np
+import sys
 
 G = nx.Graph()
 # G.add_edges_from([(1, 2), (1, 3), (1, 4), (1, 8),
@@ -128,7 +129,7 @@ class NodeInfo(object):
         self.node_r = 0.0  # 表示的就是归一化之后的揉*伽马
         self.node_dr = 0.0
         self.is_center_node = False  # 表示该节点是否为中心节点，默认都不是，因为中心节点是需要选出来的
-        self.is_enveloped_node = False  # 是否为包络节点（讲道理，这里是不是定义为是否为重叠节点更加合适？论文是这么定义的）
+        self.is_enveloped_node = True  # 是否为包络节点（讲道理，这里是不是定义为是否为重叠节点更加合适？论文是这么定义的）
         self.communities = []  # 表示每个节点划分的社区编号，因为是重叠社区，一个节点可能隶属多个社区
 
 
@@ -272,7 +273,7 @@ def selec_center(node_info_list):
     res = -1
     # 这里的循环的过程不就会导致一种结果，那就是只要某个max_index是center，
     # 那么之后的所有节点不就肯定都是啦？？？
-    # todo 反正论文上的重复逻辑没有看懂，不知道是不是我代码所写的这个意思，需要讨论一下？？？？
+    # todo 论文上的重复逻辑没有看懂，不知道是不是我代码所写的这个意思，需要讨论一下？？？？
     while len(node_info_list) > 3:
         _, max_index = max_node_dr(node_info_list)
         temp_node_info = node_info_list[max_index]
@@ -288,5 +289,59 @@ def selec_center(node_info_list):
     return res
 
 
+# todo 使用空手道的数据，跑出的结果简直不能忍受？？？，有32个节点都是中心节点？？？？肯定上面的某些初始化参数有问题，需要好好讨论一下？？/
 res = selec_center(all_nodes_info_list)
-print res
+
+
+# 初始化所有的中心节点,因为后面的节点划分社区都需要用到这个
+def init_center_node():
+    center_node_dict = {}
+    comunity = 1
+    for i in range(res, len(all_nodes_info_list)):
+        node_info = all_nodes_info_list[i]
+        node_info.is_center_node = True
+        # 设置中心节点的社区，从编号1开始
+        node_info.communities.append(comunity)
+        # 将center_node的信息加入到center_node_list中，因为first_step会使用到该信息
+        center_node_dict[node_info.node] = comunity
+        comunity += 1
+    return center_node_dict
+
+
+center_node_dict = init_center_node()
+
+
+# 第一步将所有的非中心节点进行划分
+def first_step():
+    node_community_dict = center_node_dict.copy()
+    for node_info in all_nodes_info_list:
+        if node_info.is_center_node == False:
+            community = -1
+            min_dist = sys.maxsize
+            # todo 这里什么叫距离最近，局部密度更改的节点？先按距离排序，再按局部密度排序？？？
+            for node in center_node_dict.keys():
+                if min_dist > dist_martix[node_info.node][node]:
+                    community = center_node_dict.get(node)
+            node_info.communities.append(community)
+            # 这个结构主要是下面判断一个节点是否为包络节点需要使用到，所以在这里返回出去
+            node_community_dict[node_info.node] = community
+    return node_community_dict
+
+
+node_community_dict = first_step()
+
+# 划分重叠节点出来
+def second_step():
+    for node_info in all_nodes_info_list:
+        if node_info.is_center_node == False:
+            # 计算该节点是否为包络节点
+            node_neighbors = nx.neighbors(G, node_info.node)
+            community = node_info.communities[0]
+            for node_neighbor in node_neighbors:
+                if community != node_community_dict.get(node_neighbor):
+                    # 就不是包络节点
+                    node_info.is_enveloped_node = False
+                    break
+            # 如果不是包络节点，那么会进行二次划分
+            if node_info.is_enveloped_node == False:
+                pass
