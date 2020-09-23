@@ -139,6 +139,7 @@ class NodeInfo(object):
 # 计算每个节点的揉
 def calculate_nodep(node, knn):
     dc = 0.5
+    #  todo 这个knni是表示邻居节点的排序嘛？？？？？我个人感觉这里是不是有问题？
     node_neighbors = nx.neighbors(G, node)
     # 得到节点的所有邻居节点之间的dist
     node_neighbors_dist_tuple_list = [(x, dist_martix[node][x]) for x in node_neighbors]
@@ -259,6 +260,9 @@ def calculate_predict_node_dr(node_info_list, node_index):
 # list_x = [1, 2, 3, 4, 5, 6]
 # list_y = [2.5, 3.51, 4.45, 5.52, 6.47, 7.51]
 # print calculate_linear_fitting_number(list_x, list_y, 8)
+# 可以在这一步打印出节点的一些信息，进行验证
+# for node in all_nodes_info_list:
+#     print node.node, node.node_r, node.node_dr
 
 # 算法二的核心，自动计算出node center
 def selec_center(node_info_list):
