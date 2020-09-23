@@ -40,7 +40,7 @@ def calculate_maxw(need=False):
 def calculate_cc_ij(nodei, nodej):
     V_ij = nx.common_neighbors(G, nodei, nodej)
     maxw = calculate_maxw()
-    t = 0.5
+    t = 0.3
     r = 1.0  # 暂定1.0，todo 没有弄明白论文中的r所指的意思?????
     res = 0.0
     for node in V_ij:
@@ -50,7 +50,7 @@ def calculate_cc_ij(nodei, nodej):
     return res
 
 
-# 有待确认是否是这么计算的？我看论文大概的意思就是这个
+# todo 有待确认是否是这么计算的？我看论文大概的意思就是这个
 def calculate_node_outgoing_weight(node):
     res = 0.0
     for n in G.neighbors(node):
@@ -62,14 +62,14 @@ def calculate_node_outgoing_weight(node):
 def calculate_ls_ij(nodei, nodej):
     cc_ij = calculate_cc_ij(nodei, nodej)
     V_ij = list(nx.common_neighbors(G, nodei, nodej))
-    # i,j之间右边
+    # i,j之间有边连接
     if G.has_edge(nodei, nodej):
         A_ij = G[nodei][nodej]['weight']
     else:
         A_ij = 0.0
-    # 表示i, j之间没有共同邻居，但是如果两个节点相连呢？？? 这里有待讨论
-    if len(V_ij) == 0:
-        return 0.0
+    # 表示i, j之间没有共同邻居，todo 但是如果两个节点相连呢？？? 这里有待讨论
+    # if len(V_ij) == 0:
+    #     return 0.0
     I_i = calculate_node_outgoing_weight(nodei)
     I_j = calculate_node_outgoing_weight(nodej)
     res = ((cc_ij + A_ij) * (len(V_ij) + 1)) / min(I_i, I_j)
@@ -293,6 +293,7 @@ def selec_center(node_info_list):
 res = selec_center(all_nodes_info_list)
 print res
 
+
 # 初始化所有的中心节点,因为后面的节点划分社区都需要用到这个
 def init_center_node():
     center_node_dict = {}
@@ -328,7 +329,9 @@ def first_step():
     return node_community_dict
 
 
+# 讲道理到了这一步之后，所有的节点都是已经划分了一个社区的，然后通过second_step()进行二次划分，将重叠节点找出来，并划分
 node_community_dict = first_step()
+
 
 # 划分重叠节点出来
 def second_step():
