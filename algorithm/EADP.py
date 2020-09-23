@@ -242,7 +242,7 @@ init_all_nodes_dr()
 # ================================================================================
 
 # 得到一维的线性拟合的参数a和b
-def calculate_predict_node_dr(node_info_list, true_node_dr):
+def calculate_predict_node_dr(node_info_list, node_x):
     list_x = []
     list_y = []
     for i in range(len(node_info_list)):
@@ -250,7 +250,7 @@ def calculate_predict_node_dr(node_info_list, true_node_dr):
         list_x.append(i + 1)
         list_y.append(node_info.node_dr)
     z = np.polyfit(list_x, list_y, 1)
-    return z[0] * true_node_dr + z[1]
+    return z[0] * node_x + z[1]
 
 
 # list_x = [1, 2, 3, 4, 5, 6]
@@ -259,7 +259,7 @@ def calculate_predict_node_dr(node_info_list, true_node_dr):
 
 # 算法二的核心，自动计算出node center
 def selec_center(node_info_list):
-    def max_node_dr(node_info_list):
+    def calculate_max_node_dr(node_info_list):
         max_index = -1
         max_node_dr = -1
         for i in range(1, len(node_info_list)):
@@ -275,12 +275,12 @@ def selec_center(node_info_list):
     # 那么之后的所有节点不就肯定都是啦？？？
     # todo 论文上的重复逻辑没有看懂，不知道是不是我代码所写的这个意思，需要讨论一下？？？？
     while len(node_info_list) > 3:
-        _, max_index = max_node_dr(node_info_list)
+        _, max_index = calculate_max_node_dr(node_info_list)
         temp_node_info = node_info_list[max_index]
         true_node_dr = temp_node_info.node_dr
         # 将所有的前面的进行你和
         node_info_list = node_info_list[1:max_index]
-        predict_node_dr = calculate_predict_node_dr(node_info_list, true_node_dr)
+        predict_node_dr = calculate_predict_node_dr(node_info_list, max_index)
         # todo 这么定义和论文不一样，到时候一起讨论一下？？？？
         if 2 * (true_node_dr - predict_node_dr) > true_node_dr:
             res = max_index
@@ -291,7 +291,7 @@ def selec_center(node_info_list):
 
 # todo 使用空手道的数据，跑出的结果简直不能忍受？？？，有32个节点都是中心节点？？？？肯定上面的某些初始化参数有问题，需要好好讨论一下？？/
 res = selec_center(all_nodes_info_list)
-
+print res
 
 # 初始化所有的中心节点,因为后面的节点划分社区都需要用到这个
 def init_center_node():
