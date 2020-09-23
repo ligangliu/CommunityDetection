@@ -138,8 +138,8 @@ class NodeInfo(object):
 
 # 计算每个节点的揉
 def calculate_nodep(node, knn):
-    dc = 0.5
-    #  todo 这个knni是表示邻居节点的排序嘛？？？？？我个人感觉这里是不是有问题？
+    dc = 2  # todo dc取多少？
+    #  todo 这个knni是表示邻居节点的排序嘛？？？？？我个人感觉这里是不是有问题？这个和DCP算法是有出入的
     node_neighbors = nx.neighbors(G, node)
     # 得到节点的所有邻居节点之间的dist
     node_neighbors_dist_tuple_list = [(x, dist_martix[node][x]) for x in node_neighbors]
