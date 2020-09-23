@@ -40,7 +40,7 @@ def calculate_maxw(need=False):
 def calculate_cc_ij(nodei, nodej):
     V_ij = nx.common_neighbors(G, nodei, nodej)
     maxw = calculate_maxw()
-    t = 0.3
+    t = 0.3  # todo 论文中没有说明t应该取多少，
     r = 1.0  # 暂定1.0，todo 没有弄明白论文中的r所指的意思?????
     res = 0.0
     for node in V_ij:
@@ -67,7 +67,7 @@ def calculate_ls_ij(nodei, nodej):
         A_ij = G[nodei][nodej]['weight']
     else:
         A_ij = 0.0
-    # 表示i, j之间没有共同邻居，todo 但是如果两个节点相连呢？？? 这里有待讨论
+    # 表示i, j之间没有共同邻居, 这里不用管两个节点之前是否又共同邻居
     # if len(V_ij) == 0:
     #     return 0.0
     I_i = calculate_node_outgoing_weight(nodei)
@@ -86,7 +86,9 @@ def calculate_dist_ij(nodei, nodej):
 # 初始化所有的节点之间的距离
 def init_dist_martix():
     n = len(G.nodes)
-    dist_martix = [[0 for i in xrange(n + 1)] for i in xrange(n + 1)]
+    # 这里需要注意一点，因为使用了二维数组存储节点之间的dist数据，所以节点必须以数字表示，
+    # 对于非数字的graph，需要map转换一下
+    dist_martix = [[0 for i in range(n + 1)] for i in range(n + 1)]
     max_dist = -100
     # a = np.zeros([n+1, n+1])
     for nodei in G.nodes:
@@ -99,6 +101,7 @@ def init_dist_martix():
     return dist_martix, max_dist
 
 
+# 在这个统计的过程中顺带把max_dist也记录下来。
 dist_martix, max_dist = init_dist_martix()
 
 
@@ -242,7 +245,7 @@ init_all_nodes_dr()
 # ================================================================================
 
 # 得到一维的线性拟合的参数a和b
-def calculate_predict_node_dr(node_info_list, node_x):
+def calculate_predict_node_dr(node_info_list, node_index):
     list_x = []
     list_y = []
     for i in range(len(node_info_list)):
@@ -250,7 +253,7 @@ def calculate_predict_node_dr(node_info_list, node_x):
         list_x.append(i + 1)
         list_y.append(node_info.node_dr)
     z = np.polyfit(list_x, list_y, 1)
-    return z[0] * node_x + z[1]
+    return z[0] * node_index + z[1]
 
 
 # list_x = [1, 2, 3, 4, 5, 6]
