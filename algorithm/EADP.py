@@ -22,8 +22,9 @@ for edge in G.edges:
     G[edge[0]][edge[1]]['weight'] = 1.0
 
 # 1) Distance function
-a = 0.001
-b = 0.001
+a = 0.001  # 计算cc(i,j)的时候使用的，一个较小的正值，避免分母为0的情况
+b = 0.001  # 计算dist(i, j)的时候使用的，表示当i,j时孤立的节点的时候
+c = 0.1  # 在second_step()分配重叠节点的时候使用的。 todo 这个取值论文也没有说明，很难知道具体是多少值？？/
 
 
 # 计算G中最大权重
@@ -468,7 +469,6 @@ def second_step():
                     pass
                 else:
                     node_membership_dict = calculate_node_membership(nodei)
-                    c = 0.1  # todo 这个取值论文也没有说明，很难知道具体是多少值？？/
                     # 遍历所有的knn节点的membership值，判断该节点是否划分到多个社区
                     nodei_community = node_community_dict.get(nodei)
                     nodei_membership = node_membership_dict.get(nodei_community)
@@ -481,5 +481,22 @@ def second_step():
 
 
 second_step()
+# 打印所有的节点的信息
 for node_info in all_nodes_info_list:
     print node_info
+# 打印社区划分的节点
+print "==================================="
+community_nodes_dict = {}
+for node_info in all_nodes_info_list:
+    node = node_info.node
+    communities = node_info.communities
+    for community in communities:
+        if community_nodes_dict.has_key(community):
+            community_nodes_dict.get(community).append(node)
+        else:
+            community_nodes_dict[community] = [node]
+# 打印每个社区编号，以及分配到该社区的节点信息
+for key, value in community_nodes_dict.items():
+    print "community: " + str(key)
+    print value
+    print "---------------------------"

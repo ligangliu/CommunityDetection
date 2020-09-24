@@ -1,3 +1,4 @@
 # -*- coding: utf-8 -*-
-print "ffffffffffffffffffffff"
 
+a = [1, 2, 3]
+print a
