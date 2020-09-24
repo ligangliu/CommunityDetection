@@ -80,7 +80,7 @@ def calculate_ls_ij(nodei, nodej):
 def calculate_dist_ij(nodei, nodej):
     ls_ij = calculate_ls_ij(nodei, nodej)
     res = 1 / (ls_ij + b)
-    return res
+    return res, ls_ij
 
 
 # 初始化所有的节点之间的距离
@@ -89,20 +89,23 @@ def init_dist_martix():
     # 这里需要注意一点，因为使用了二维数组存储节点之间的dist数据，所以节点必须以数字表示，
     # 对于非数字的graph，需要map转换一下
     dist_martix = [[0 for i in range(n + 1)] for i in range(n + 1)]
+    ls_martix = [[0 for i in range(n + 1)] for i in range(n + 1)]
     max_dist = -100
     # a = np.zeros([n+1, n+1])
     for nodei in G.nodes:
         for nodej in G.nodes:
             if nodei != nodej and dist_martix[nodei][nodej] == 0:
-                temp = calculate_dist_ij(nodei, nodej)
-                max_dist = max(max_dist, temp)
-                dist_martix[nodei][nodej] = temp
-                dist_martix[nodej][nodei] = temp
-    return dist_martix, max_dist
+                dist_ij, ls_ij = calculate_dist_ij(nodei, nodej)
+                max_dist = max(max_dist, dist_ij)
+                dist_martix[nodei][nodej] = dist_ij
+                dist_martix[nodej][nodei] = dist_ij
+                ls_martix[nodei][nodej] = ls_ij
+                ls_martix[nodej][nodei] = ls_ij
+    return dist_martix, max_dist, ls_martix
 
 
-# 在这个统计的过程中顺带把max_dist也记录下来。
-dist_martix, max_dist = init_dist_martix()
+# 在这个统计的过程中顺带把max_dist也记录下来。ls_martix主要在second_step中使用到了，所以在这一步也初始化好
+dist_martix, max_dist, ls_martix = init_dist_martix()
 
 
 # for i in range(len(dist_martix)):
@@ -135,9 +138,20 @@ class NodeInfo(object):
         self.is_enveloped_node = True  # 是否为包络节点（讲道理，这里是不是定义为是否为重叠节点更加合适？论文是这么定义的）
         self.communities = []  # 表示每个节点划分的社区编号，因为是重叠社区，一个节点可能隶属多个社区
 
+    def gatherAttrs(self):
+        return ",".join("{}={}"
+                        .format(k, getattr(self, k))
+                        for k in self.__dict__.keys())
+
+    # 对节点的信息打印重写，方便程序打印输出
+    def __str__(self):
+        return "[{}:{}]".format(self.__class__.__name__, self.gatherAttrs())
+
+# knn = calculate_knn()
 
 # 计算每个节点的揉
-def calculate_nodep(node, knn):
+def calculate_nodep(node):
+    knn = calculate_knn()
     dc = 2  # todo dc取多少？
     #  todo 这个knni是表示邻居节点的排序嘛？？？？？我个人感觉这里是不是有问题？这个和DCP算法是有出入的
     node_neighbors = nx.neighbors(G, node)
@@ -159,12 +173,11 @@ def calculate_nodep(node, knn):
 
 # 初始化所有的节点的信息
 def init_all_nodes_info():
-    knn = calculate_knn()
     res = []
     all_node_p = []
     # 1) 初始化所有的
     for node in G.nodes:
-        node_p = calculate_nodep(node, knn)
+        node_p = calculate_nodep(node)
         t = NodeInfo()
         t.node = node
         t.node_p = node_p
@@ -241,7 +254,7 @@ init_all_nodes_dr()
 
 # ================================================================================
 # 以上的所有代码应该是初始化好了所有的节点的信息，
-# 包括揉，伽马，还有d伽马等信息。那么讲道理下面的步骤就应该是自动计算中心节点
+# 包括揉，伽马，还有d伽马等信息。那么讲道理下面的步骤就应该是     自动计算中心节点
 # 以及将节点划分到对应的社区
 # ================================================================================
 
@@ -301,6 +314,9 @@ res = selec_center(all_nodes_info_list)
 print res
 
 
+# print res
+
+
 # 初始化所有的中心节点,因为后面的节点划分社区都需要用到这个
 def init_center_node():
     center_node_dict = {}
@@ -340,18 +356,107 @@ def first_step():
 node_community_dict = first_step()
 
 
+# 计算一个节点的knn的邻居节点的集合
+def calculate_node_knn_neighbor(nodei):
+    node_neighbors = nx.neighbors(G, nodei)
+    # 得到节点的所有邻居节点之间的dist
+    node_neighbors_dist_tuple_list = [(x, dist_martix[nodei][x]) for x in node_neighbors]
+    # 对所有的邻居节点进行排序
+    node_neighbors_dist_tuple_list = sorted(node_neighbors_dist_tuple_list, key=lambda x: x[1])
+    # 找到最小的k个邻居节点
+    res = []
+    k = len(node_neighbors_dist_tuple_list)
+    knn = calculate_knn()
+    # 如果不够就取所有的
+    if k < knn:
+        knn = k
+    for i in range(knn):
+        nodej = node_neighbors_dist_tuple_list[i][0]
+        res.append(nodej)
+    return res
+
+
+# 计算每个节点的knn个邻居节点的ls的值之和
+def calculate_node_knn_neighboor_ls(nodei, knn_node_neighbors, comminity=None):
+    res = 0.0
+    for nodej in range(knn_node_neighbors):
+        if comminity is None:
+            res += ls_martix[nodei][nodej]
+        else:
+            if node_community_dict.get(nodej) == comminity:
+                res += ls_martix[nodei][nodej]
+    return res
+
+
+# 计算非包络节点的membership, 用于二次划分时将该节点划分到一个新的社区
+def calculate_node_membership(nodei):
+    # 得到nodei的knn的邻居节点
+    nodei_knn = calculate_node_knn_neighbor(nodei)
+    # 得到nodei的knn个邻居节点以及它们的划分社区信息
+    # node_knn_node_to_community_dict = [{node: node_community_dict.get(node)} for node in nodei_knn_neighbors]
+    node_knn_community_to_node_dict = {}
+    for nodej in nodei_knn:
+        nodej_community = node_community_dict.get(nodej)
+        if node_knn_community_to_node_dict.has_key(nodej):
+            node_knn_community_to_node_dict.get(nodej_community).append(nodej)
+        else:
+            node_knn_community_to_node_dict[nodej_community] = [nodej]
+    node_membership_dict = {}
+    # 对于每一个接待你进行划分
+    for community_c in node_knn_community_to_node_dict.keys():
+        res = 0.0
+        node_knn_c = node_knn_community_to_node_dict.get(community_c)
+        for nodej in node_knn_c:
+            nodej_knn = calculate_node_knn_neighbor(nodej)
+            a = calculate_node_knn_neighboor_ls(nodej, nodej_knn, community_c)
+            b = calculate_node_knn_neighboor_ls(nodej, nodej_knn)
+            res += ls_martix[nodei][nodej] * (a / b)
+        # 更新结果
+        node_membership_dict[community_c] = res
+    return node_membership_dict
+
+
 # 划分重叠节点出来
 def second_step():
     for node_info in all_nodes_info_list:
+        nodei = node_info.node
         if node_info.is_center_node == False:
             # 计算该节点是否为包络节点
-            node_neighbors = nx.neighbors(G, node_info.node)
+            node_neighbors = nx.neighbors(G, nodei)
             community = node_info.communities[0]
-            for node_neighbor in node_neighbors:
-                if community != node_community_dict.get(node_neighbor):
-                    # 就不是包络节点
-                    node_info.is_enveloped_node = False
-                    break
+            node_neighbors_community = set([node_community_dict.get(node_neighbor) for node_neighbor in node_neighbors])
+            if len(node_neighbors_community) != 1 or node_neighbors_community[0] != community:
+                # 说明该节点就不是包络节点
+                node_info.is_enveloped_node = False
+            # for node_neighbor in node_neighbors:
+            #     if community != node_community_dict.get(node_neighbor):
+            #         # 就不是包络节点
+            #         node_info.is_enveloped_node = False
+            #         break
             # 如果不是包络节点，那么会进行二次划分
             if node_info.is_enveloped_node == False:
-                pass
+                # 1) 如果该节点和它的所有邻居划分社区都不相同，那么该节点先不管 # todo 论文中归感觉没有考虑这一点
+                # 说明该节点和所有的邻居节点的社区中不包含该节点划分的社区，这种情况不管
+                nodei_knn_neighbors = calculate_node_knn_neighbor(nodei)
+                # 得到该节点的knn个最近的邻居节点的所有社区信息
+                node_knn_neighbors_community = set([node_community_dict.get(node) for node in nodei_knn_neighbors])
+                if community not in node_knn_neighbors_community:
+                    pass
+                else:
+                    node_membership_dict = calculate_node_membership(nodei)
+                    c = 0.1  # todo 这个取值论文也没有说明，很难知道具体是多少值？？/
+                    # 遍历所有的knn节点的membership值，判断该节点是否划分到多个社区
+                    nodei_community = node_community_dict.get(nodei)
+                    nodei_membership = node_membership_dict.get(nodei_community)
+                    node_membership_dict.pop(nodei_community)
+                    for community_c in node_membership_dict:
+                        t = node_membership_dict.get(community_c) / nodei_membership
+                        if (t >= c):
+                            # 说明需要将该节点划分到对应的社区
+                            node_info.communities.append(community_c)
+
+
+# second_step()
+print "========================"
+for node_info in all_nodes_info_list:
+    print node_info
