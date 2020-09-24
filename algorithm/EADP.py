@@ -147,6 +147,7 @@ class NodeInfo(object):
     def __str__(self):
         return "[{}:{}]".format(self.__class__.__name__, self.gatherAttrs())
 
+
 # knn = calculate_knn()
 
 # 计算每个节点的揉
@@ -227,29 +228,53 @@ def init_all_nodes_info():
 
 # all_nodes_info_list 很重要，所有节点的信息统一放在这个list中
 all_nodes_info_list = init_all_nodes_info()
+# all_nodes_info_dict 便于后面从filter_node_list中通过node信息来更新到all_nodes_info_list上的信息
+all_nodes_info_dict = {node_info.node: node_info for node_info in all_nodes_info_list}
 
 
-# 讲道理这里应该还需要过滤一些更不不可能成为clustering node的节点，暂未实现
+# 讲道理这里应该还需要过滤一些更不不可能成为clustering node的节点
+# todo 有待确认论文中的逻辑是否是这样的？？？？
 def filter_corredpond_nodes(all_nodes_info_list):
-    pass
+    all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_p)
+    count = int(0.8 * len(all_nodes_info_list))
+    sum_node_p = 0.0
+    for i in range(count):
+        sum_node_p += all_nodes_info_list[i].node_p
+    averge_eighty_percen_node_p = float(sum_node_p) / count
+
+    sum_node_r = 0.0
+    all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_r)
+    for i in range(count):
+        sum_node_r += all_nodes_info_list[i].node_r
+    averge_eighty_percen_node_r = float(sum_node_r) / count
+
+    filter_nodes_info_list = []
+    for node_info in all_nodes_info_list:
+        if node_info.node_p < averge_eighty_percen_node_p and node_info.node_r < averge_eighty_percen_node_r:
+            pass
+        else:
+            filter_nodes_info_list.append(node_info)
+    return filter_nodes_info_list
 
 
-# 按照node_r进行排序
-all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_r)
+# 按照node_r进行排序,因为论文的算法二中选择中心节点就是使用的过滤之后的节点进行筛选的
+filter_nodes_info_list = filter_corredpond_nodes(all_nodes_info_list)
+# all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_r)
+filter_nodes_info_list = sorted(filter_nodes_info_list, key=lambda x: x.node_r)
 
 
 # 初始化所有的节点的node_dr信息，并返回最大的node_dr以及对应的index
-def init_all_nodes_dr():
+def init_filter_nodes_dr():
     # 第一个节点应该是没有node_dr的，所以从第二个节点开始
-    for i in range(1, len(all_nodes_info_list)):
-        a = all_nodes_info_list[i - 1]
-        b = all_nodes_info_list[i]
+    for i in range(1, len(filter_nodes_info_list)):
+        a = filter_nodes_info_list[i - 1]
+        b = filter_nodes_info_list[i]
         node_dr = b.node_r - a.node_r
         b.node_dr = node_dr
 
 
-# 初始化所有节点的d伽马
-init_all_nodes_dr()
+# 初始化所有没有被过滤的节点的d伽马
+init_filter_nodes_dr()
 
 
 # ================================================================================
@@ -310,19 +335,18 @@ def selec_center(node_info_list):
 
 
 # todo 使用空手道的数据，跑出的结果简直不能忍受？？？，有32个节点都是中心节点？？？？肯定上面的某些初始化参数有问题，需要好好讨论一下？？/
-res = selec_center(all_nodes_info_list)
-print res
-
-
-# print res
+# filter_nodes_info_list_index 表示的是过滤的节点的list的下标之后的所有节点为中心节点
+filter_nodes_info_list_index = selec_center(filter_nodes_info_list)
+print filter_nodes_info_list_index, len(filter_nodes_info_list)
 
 
 # 初始化所有的中心节点,因为后面的节点划分社区都需要用到这个
 def init_center_node():
     center_node_dict = {}
     comunity = 1
-    for i in range(res, len(all_nodes_info_list)):
-        node_info = all_nodes_info_list[i]
+    for i in range(filter_nodes_info_list_index, len(filter_nodes_info_list)):
+        filter_node_info = filter_nodes_info_list[i]
+        node_info = all_nodes_info_dict.get(filter_node_info.node)
         node_info.is_center_node = True
         # 设置中心节点的社区，从编号1开始
         node_info.communities.append(comunity)
@@ -379,7 +403,7 @@ def calculate_node_knn_neighbor(nodei):
 # 计算每个节点的knn个邻居节点的ls的值之和
 def calculate_node_knn_neighboor_ls(nodei, knn_node_neighbors, comminity=None):
     res = 0.0
-    for nodej in range(knn_node_neighbors):
+    for nodej in knn_node_neighbors:
         if comminity is None:
             res += ls_martix[nodei][nodej]
         else:
@@ -420,12 +444,12 @@ def calculate_node_membership(nodei):
 def second_step():
     for node_info in all_nodes_info_list:
         nodei = node_info.node
-        if node_info.is_center_node == False:
+        if not node_info.is_center_node:
             # 计算该节点是否为包络节点
             node_neighbors = nx.neighbors(G, nodei)
             community = node_info.communities[0]
             node_neighbors_community = set([node_community_dict.get(node_neighbor) for node_neighbor in node_neighbors])
-            if len(node_neighbors_community) != 1 or node_neighbors_community[0] != community:
+            if len(node_neighbors_community) != 1 or node_neighbors_community.pop() != community:
                 # 说明该节点就不是包络节点
                 node_info.is_enveloped_node = False
             # for node_neighbor in node_neighbors:
@@ -434,7 +458,7 @@ def second_step():
             #         node_info.is_enveloped_node = False
             #         break
             # 如果不是包络节点，那么会进行二次划分
-            if node_info.is_enveloped_node == False:
+            if not node_info.is_enveloped_node:
                 # 1) 如果该节点和它的所有邻居划分社区都不相同，那么该节点先不管 # todo 论文中归感觉没有考虑这一点
                 # 说明该节点和所有的邻居节点的社区中不包含该节点划分的社区，这种情况不管
                 nodei_knn_neighbors = calculate_node_knn_neighbor(nodei)
@@ -456,7 +480,6 @@ def second_step():
                             node_info.communities.append(community_c)
 
 
-# second_step()
-print "========================"
+second_step()
 for node_info in all_nodes_info_list:
     print node_info
