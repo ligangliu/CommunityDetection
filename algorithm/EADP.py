@@ -25,6 +25,7 @@ for edge in G.edges:
 a = 0.001  # 计算cc(i,j)的时候使用的，一个较小的正值，避免分母为0的情况
 b = 0.001  # 计算dist(i, j)的时候使用的，表示当i,j时孤立的节点的时候
 c = 0.1  # 在second_step()分配重叠节点的时候使用的。 todo 这个取值论文也没有说明，很难知道具体是多少值？？/
+dc = 2  # todo dc取多少？论文中是当dc取2%效果最佳
 
 
 # 计算G中最大权重
@@ -37,7 +38,7 @@ def calculate_maxw(need=False):
     return res
 
 
-# 计算cc(i, j)
+# 计算cc(i, j)，表示的是节点i,j的共同节点对节点i和节点j的链接强度的共享，因此这个方法应该是考虑的节点的共同邻居节点
 def calculate_cc_ij(nodei, nodej):
     V_ij = nx.common_neighbors(G, nodei, nodej)
     maxw = calculate_maxw()
@@ -46,6 +47,7 @@ def calculate_cc_ij(nodei, nodej):
     res = 0.0
     for node in V_ij:
         w_ipj = min(G[nodei][node]['weight'], G[nodej][node]['weight'])
+        # 其实这里会发现，针对如果是无权重的图(即有边的)
         temp = math.pow(((w_ipj - maxw) / (r * t + a)), 2)
         res = res + w_ipj * math.exp(-temp)
     return res
@@ -59,7 +61,7 @@ def calculate_node_outgoing_weight(node):
     return res
 
 
-# 计算ls(i, j)
+# 计算ls(i, j)，同时考虑直接链接权重和共同节点的共享，所以讲道理这个函数是考虑的cc(i,j)和i,j的之间的权重值
 def calculate_ls_ij(nodei, nodej):
     cc_ij = calculate_cc_ij(nodei, nodej)
     V_ij = list(nx.common_neighbors(G, nodei, nodej))
@@ -79,7 +81,11 @@ def calculate_ls_ij(nodei, nodej):
 
 # 计算节点i,j的distance
 def calculate_dist_ij(nodei, nodej):
-    ls_ij = calculate_ls_ij(nodei, nodej)
+    # 判断两个节点中是否存在至少一个节点为孤立节点
+    if G.degree(nodei) == 0 or G.degree(nodej) == 0:
+        ls_ij = 0.0
+    else:
+        ls_ij = calculate_ls_ij(nodei, nodej)
     res = 1 / (ls_ij + b)
     return res, ls_ij
 
@@ -91,7 +97,7 @@ def init_dist_martix():
     # 对于非数字的graph，需要map转换一下
     dist_martix = [[0 for i in range(n + 1)] for i in range(n + 1)]
     ls_martix = [[0 for i in range(n + 1)] for i in range(n + 1)]
-    max_dist = -100
+    max_dist = -100  # 这个变量只是顺带在计算的过程中将最大的dist记录下来而已
     # a = np.zeros([n+1, n+1])
     for nodei in G.nodes:
         for nodej in G.nodes:
@@ -149,26 +155,38 @@ class NodeInfo(object):
         return "[{}:{}]".format(self.__class__.__name__, self.gatherAttrs())
 
 
-# knn = calculate_knn()
+#
 
-# 计算每个节点的揉
-def calculate_nodep(node):
-    knn = calculate_knn()
-    dc = 2  # todo dc取多少？
-    #  todo 这个knni是表示邻居节点的排序嘛？？？？？我个人感觉这里是不是有问题？这个和DCP算法是有出入的
-    node_neighbors = nx.neighbors(G, node)
+# 计算一个节点的knn的邻居节点的集合 todo 这个方法有很严重的歧义，中英文版的论文给的不一样
+def calculate_node_knn_neighbor(nodei):
+    # node_neighbors = nx.neighbors(G, nodei)
+    # 我个人觉得这里不一定是邻居节点,应该是将所有的节点的dist进行排序，取最近的k个节点
+    knn_nodes = [node for node in G.nodes if node != nodei]
     # 得到节点的所有邻居节点之间的dist
-    node_neighbors_dist_tuple_list = [(x, dist_martix[node][x]) for x in node_neighbors]
+    node_neighbors_dist_tuple_list = [(x, dist_martix[nodei][x]) for x in knn_nodes]
     # 对所有的邻居节点进行排序
     node_neighbors_dist_tuple_list = sorted(node_neighbors_dist_tuple_list, key=lambda x: x[1])
     # 找到最小的k个邻居节点
-    res = 0.0
+    res = []
     k = len(node_neighbors_dist_tuple_list)
+    knn = calculate_knn()
     # 如果不够就取所有的
     if k < knn:
         knn = k
     for i in range(knn):
-        temp = math.pow((float(node_neighbors_dist_tuple_list[i][1]) / dc), 2)
+        nodej = node_neighbors_dist_tuple_list[i][0]
+        res.append(nodej)
+    return res
+
+
+# 计算每个节点的揉
+def calculate_nodep(node):
+    # 找到最小的k个邻居节点
+    knn_neighbors = calculate_node_knn_neighbor(node)
+    res = 0.0
+    # 如果不够就取所有的
+    for knn_neighbor in knn_neighbors:
+        temp = math.pow((float(dist_martix[node][knn_neighbor]) / dc), 2)
         res += math.exp(-temp)
     return res
 
@@ -190,7 +208,8 @@ def init_all_nodes_info():
     max_node_p = max(all_node_p)
     for node_info in res:
         node_p = node_info.node_p
-        node_info.node_p_1 = (node_p - min_node_p) / (max_node_p - min_node_p)
+        node_p_1 = (node_p - min_node_p) / (max_node_p - min_node_p)
+        node_info.node_p_1 = node_p_1
 
     # 3) 初始化所有节点的伽马
     # 计算每个节点的伽马函数，由于这个方法外部不会调用，就暂且定义在方法内部吧，问题不大！
@@ -221,9 +240,11 @@ def init_all_nodes_info():
     min_node_g = min(all_node_g)
     for node_info in res:
         node_g = node_info.node_g
-        node_info.node_g_1 = (node_g - min_node_g) / (max_node_g - min_node_g)
+        node_g_1 = (node_g - min_node_g) / (max_node_g - min_node_g)
+        node_info.node_g_1 = node_g_1
         # 且顺便计算出node_r
-        node_info.node_r = node_info.node_p_1 * node_info.node_g_1
+        node_r = node_info.node_p_1 * node_info.node_g_1
+        node_info.node_r = node_r
     return res
 
 
@@ -251,7 +272,7 @@ def filter_corredpond_nodes(all_nodes_info_list):
 
     filter_nodes_info_list = []
     for node_info in all_nodes_info_list:
-        if node_info.node_p < averge_eighty_percen_node_p and node_info.node_r < averge_eighty_percen_node_r:
+        if node_info.node_p < averge_eighty_percen_node_p or node_info.node_r < averge_eighty_percen_node_r:
             pass
         else:
             filter_nodes_info_list.append(node_info)
@@ -381,24 +402,24 @@ def first_step():
 node_community_dict = first_step()
 
 
-# 计算一个节点的knn的邻居节点的集合
-def calculate_node_knn_neighbor(nodei):
-    node_neighbors = nx.neighbors(G, nodei)
-    # 得到节点的所有邻居节点之间的dist
-    node_neighbors_dist_tuple_list = [(x, dist_martix[nodei][x]) for x in node_neighbors]
-    # 对所有的邻居节点进行排序
-    node_neighbors_dist_tuple_list = sorted(node_neighbors_dist_tuple_list, key=lambda x: x[1])
-    # 找到最小的k个邻居节点
-    res = []
-    k = len(node_neighbors_dist_tuple_list)
-    knn = calculate_knn()
-    # 如果不够就取所有的
-    if k < knn:
-        knn = k
-    for i in range(knn):
-        nodej = node_neighbors_dist_tuple_list[i][0]
-        res.append(nodej)
-    return res
+# # 计算一个节点的knn的邻居节点的集合
+# def calculate_node_knn_neighbor(nodei):
+#     node_neighbors = nx.neighbors(G, nodei)
+#     # 得到节点的所有邻居节点之间的dist
+#     node_neighbors_dist_tuple_list = [(x, dist_martix[nodei][x]) for x in node_neighbors]
+#     # 对所有的邻居节点进行排序
+#     node_neighbors_dist_tuple_list = sorted(node_neighbors_dist_tuple_list, key=lambda x: x[1])
+#     # 找到最小的k个邻居节点
+#     res = []
+#     k = len(node_neighbors_dist_tuple_list)
+#     knn = calculate_knn()
+#     # 如果不够就取所有的
+#     if k < knn:
+#         knn = k
+#     for i in range(knn):
+#         nodej = node_neighbors_dist_tuple_list[i][0]
+#         res.append(nodej)
+#     return res
 
 
 # 计算每个节点的knn个邻居节点的ls的值之和
@@ -422,7 +443,7 @@ def calculate_node_membership(nodei):
     node_knn_community_to_node_dict = {}
     for nodej in nodei_knn:
         nodej_community = node_community_dict.get(nodej)
-        if node_knn_community_to_node_dict.has_key(nodej):
+        if node_knn_community_to_node_dict.has_key(nodej_community):
             node_knn_community_to_node_dict.get(nodej_community).append(nodej)
         else:
             node_knn_community_to_node_dict[nodej_community] = [nodej]
