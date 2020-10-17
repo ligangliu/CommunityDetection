@@ -10,6 +10,21 @@ import networkx as nx
 import math
 import numpy as np
 import sys
+import matplotlib.pyplot as plt
+
+
+# 展示x,y的二维坐标点，用于后面的数据验证
+def show_data(xmin=0, xmax=1, ymin=0, ymax=1, x=None, y=None):
+    if x is None or y is None:
+        return
+    plt.title("I'm a scatter diagram.")
+    plt.xlim(xmax=xmax, xmin=xmin)
+    plt.ylim(ymax=ymax, ymin=ymin)
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.plot(x, y, 'ro')
+    plt.show()
+
 
 G = nx.Graph()
 # G.add_edges_from([(1, 2), (1, 3), (1, 4), (1, 8),
@@ -22,10 +37,10 @@ for edge in G.edges:
     G[edge[0]][edge[1]]['weight'] = 1.0
 
 # 1) Distance function
-a = 0.001  # 计算cc(i,j)的时候使用的，一个较小的正值，避免分母为0的情况
-b = 0.001  # 计算dist(i, j)的时候使用的，表示当i,j时孤立的节点的时候
-c = 0.1  # 在second_step()分配重叠节点的时候使用的。 todo 这个取值论文也没有说明，很难知道具体是多少值？？/
-dc = 2  # todo dc取多少？论文中是当dc取2%效果最佳
+a = 0.1  # 计算cc(i,j)的时候使用的，一个较小的正值，避免分母为0的情况
+b = 0.1  # 计算dist(i, j)的时候使用的，表示当i,j时孤立的节点的时候
+c = 0.1  # 在second_step()分配重叠节点的时候使用的。 todo 这个取值论文也没有说明，很难知道具体是多少值？？
+dc = 0.2  # todo dc取多少？论文中是当dc取2%效果最佳，因为这个直接影响到计算node_p的值
 
 
 # 计算G中最大权重
@@ -103,7 +118,8 @@ def init_dist_martix():
         for nodej in G.nodes:
             if nodei != nodej and dist_martix[nodei][nodej] == 0:
                 dist_ij, ls_ij = calculate_dist_ij(nodei, nodej)
-                max_dist = max(max_dist, dist_ij)
+                if dist_ij != 1/b:
+                    max_dist = max(max_dist, dist_ij)
                 dist_martix[nodei][nodej] = dist_ij
                 dist_martix[nodej][nodei] = dist_ij
                 ls_martix[nodei][nodej] = ls_ij
@@ -155,11 +171,9 @@ class NodeInfo(object):
         return "[{}:{}]".format(self.__class__.__name__, self.gatherAttrs())
 
 
-#
-
 # 计算一个节点的knn的邻居节点的集合 todo 这个方法有很严重的歧义，中英文版的论文给的不一样
 def calculate_node_knn_neighbor(nodei):
-    # node_neighbors = nx.neighbors(G, nodei)
+    # knn_nodes = nx.neighbors(G, nodei)
     # 我个人觉得这里不一定是邻居节点,应该是将所有的节点的dist进行排序，取最近的k个节点
     knn_nodes = [node for node in G.nodes if node != nodei]
     # 得到节点的所有邻居节点之间的dist
@@ -186,8 +200,9 @@ def calculate_nodep(node):
     res = 0.0
     # 如果不够就取所有的
     for knn_neighbor in knn_neighbors:
+        # a = float(dist_martix[node][knn_neighbor])
         temp = math.pow((float(dist_martix[node][knn_neighbor]) / dc), 2)
-        res += math.exp(-temp)
+        res = res + math.exp(-temp)
     return res
 
 
@@ -225,6 +240,8 @@ def init_all_nodes_info():
     for i in range(len(res)):
         # 当揉为最大的时候，取最大的dist
         if i == len(res) - 1:
+            # todo ????? 这里应该是有问题的，不能取最大的，因为这里取最大的会导致下面的归一化的时候出现问题。暂定这里取出0试一试
+            # max_dist = 1.0
             res[i].node_g = max_dist
             all_node_g.append(max_dist)
         else:
@@ -247,16 +264,44 @@ def init_all_nodes_info():
         node_info.node_r = node_r
     return res
 
-
 # all_nodes_info_list 很重要，所有节点的信息统一放在这个list中
 all_nodes_info_list = init_all_nodes_info()
 # all_nodes_info_dict 便于后面从filter_node_list中通过node信息来更新到all_nodes_info_list上的信息
 all_nodes_info_dict = {node_info.node: node_info for node_info in all_nodes_info_list}
 
+# 这个保存一下所有节点按照揉进行排序之后的节点编号的变化信息，只是用来清晰的记录那个节点的揉的值是最大的而已
+ascending_nod_p_node_id_list = []
+
+# 因为此时的所有的all_nodes_info_list 是按照node_p进行升序的
+for node_info in all_nodes_info_list:
+    ascending_nod_p_node_id_list.append(node_info.node)
+
+print '-'*30
+print 'ascending_nod_p node: ' + str(ascending_nod_p_node_id_list)
+print '-'*30
+
+def node_p_1_g_1_to_xy(nodes_info_list):
+    x = []
+    y = []
+    z = []
+    count = 1
+    for node_info in nodes_info_list:
+        x.append(count)
+        y.append(node_info.node_p_1)
+        # print node_info.node_p_1
+        z.append(node_info.node_g_1)
+        # print node_info.node_g_1
+        count += 1
+    return x, y, z
+
+x, y, z = node_p_1_g_1_to_xy(all_nodes_info_list)
+# show_data(xmax=len(x), x=x, y=y)
+# show_data(xmax=len(x), x=x, y=z)
 
 # 讲道理这里应该还需要过滤一些更不不可能成为clustering node的节点
 # todo 有待确认论文中的逻辑是否是这样的？？？？
 def filter_corredpond_nodes(all_nodes_info_list):
+    sum_node_r = 0.0
     all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_p)
     count = int(0.8 * len(all_nodes_info_list))
     sum_node_p = 0.0
@@ -276,13 +321,25 @@ def filter_corredpond_nodes(all_nodes_info_list):
             pass
         else:
             filter_nodes_info_list.append(node_info)
-    return filter_nodes_info_list
+            sum_node_r += node_info.node_r
+    averge_node_r = sum_node_r / len(filter_nodes_info_list)
+    return filter_nodes_info_list, averge_node_r
 
 
 # 按照node_r进行排序,因为论文的算法二中选择中心节点就是使用的过滤之后的节点进行筛选的
-filter_nodes_info_list = filter_corredpond_nodes(all_nodes_info_list)
+filter_nodes_info_list, averge_node_r = filter_corredpond_nodes(all_nodes_info_list)
 # all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_r)
 filter_nodes_info_list = sorted(filter_nodes_info_list, key=lambda x: x.node_r)
+
+# 这个保存一下所有节点按照node_r进行排序之后的节点编号的变化信息，只是用来清晰的记录那个节点的揉的值是最大的而已
+ascending_nod_r_node_id_list = []
+
+# 因为此时的所有的all_nodes_info_list 是按照node_p进行升序的
+for node_info in filter_nodes_info_list:
+    ascending_nod_r_node_id_list.append(node_info.node)
+print '-'*30
+print 'ascending_node_r node: ' + str(ascending_nod_r_node_id_list)
+print '-'*30
 
 
 # 初始化所有的节点的node_dr信息，并返回最大的node_dr以及对应的index
@@ -298,11 +355,31 @@ def init_filter_nodes_dr():
 # 初始化所有没有被过滤的节点的d伽马
 init_filter_nodes_dr()
 
+def nodes_r_node_dr_to_xy(nodes_info_list):
+    x = []
+    y = []
+    z = []
+    count = 1
+    for node_info in nodes_info_list:
+        x.append(count)
+        y.append(node_info.node_r)
+        if count == 1:
+            z.append(1.0)
+        else:
+            z.append(node_info.node_dr)
+        count += 1
+    return x, y, z
+
+
+x, y, z = nodes_r_node_dr_to_xy(filter_nodes_info_list)
+# show_data(xmax=len(x), x=x, y=y)
+# show_data(xmax=len(x), x=x, y=z)
 
 # ================================================================================
 # 以上的所有代码应该是初始化好了所有的节点的信息，
-# 包括揉，伽马，还有d伽马等信息。那么讲道理下面的步骤就应该是     自动计算中心节点
-# 以及将节点划分到对应的社区
+# 包括揉，伽马，还有d伽马等信息。那么讲道理下面的步骤就应该是
+# 1) 自动计算中心节点
+# 2) 将节点划分到对应的社区
 # ================================================================================
 
 # 得到一维的线性拟合的参数a和b
@@ -345,8 +422,10 @@ def selec_center(node_info_list):
         _, max_index = calculate_max_node_dr(node_info_list)
         temp_node_info = node_info_list[max_index]
         true_node_dr = temp_node_info.node_dr
-        # 将所有的前面的进行你和
-        node_info_list = node_info_list[1:max_index]
+        # 将所有的前面的进行拟合
+        node_info_list = node_info_list[0:max_index]
+        if len(node_info_list) < 3 or temp_node_info.node_dr < averge_node_r:
+            break
         predict_node_dr = calculate_predict_node_dr(node_info_list, max_index)
         # todo 这么定义和论文不一样，到时候一起讨论一下？？？？
         if 2 * (true_node_dr - predict_node_dr) > true_node_dr:
@@ -356,7 +435,6 @@ def selec_center(node_info_list):
     return res
 
 
-# todo 使用空手道的数据，跑出的结果简直不能忍受？？？，有32个节点都是中心节点？？？？肯定上面的某些初始化参数有问题，需要好好讨论一下？？/
 # filter_nodes_info_list_index 表示的是过滤的节点的list的下标之后的所有节点为中心节点
 filter_nodes_info_list_index = selec_center(filter_nodes_info_list)
 print filter_nodes_info_list_index, len(filter_nodes_info_list)
@@ -390,8 +468,9 @@ def first_step():
             min_dist = sys.maxsize
             # todo 这里什么叫距离最近，局部密度更改的节点？先按距离排序，再按局部密度排序？？？
             for node in center_node_dict.keys():
-                if min_dist > dist_martix[node_info.node][node]:
+                if dist_martix[node_info.node][node] < min_dist:
                     community = center_node_dict.get(node)
+                    min_dist = dist_martix[node_info.node][node]
             node_info.communities.append(community)
             # 这个结构主要是下面判断一个节点是否为包络节点需要使用到，所以在这里返回出去
             node_community_dict[node_info.node] = community
@@ -502,9 +581,18 @@ def second_step():
 
 
 second_step()
+center_nodes = []
 # 打印所有的节点的信息
 for node_info in all_nodes_info_list:
-    print node_info
+    if node_info.is_center_node:
+        center_nodes.append(node_info.node)
+    # print node_info
+
+# 打印输出中心节点
+print '-'*30
+print "center nodes: " + str(center_nodes)
+print '-'*30
+
 # 打印社区划分的节点
 print "==================================="
 community_nodes_dict = {}
