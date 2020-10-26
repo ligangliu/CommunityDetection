@@ -2,6 +2,7 @@
 
 import scipy as sp
 import math
+from scipy.stats import entropy
 
 ################## Helper functions ##############
 logBase = 2
@@ -25,18 +26,18 @@ def __cover_entropy(cover, allNodes):  # cover is a list of set, no com ID
 def __com_pair_conditional_entropy(cl, clKnown, allNodes):  # cl1,cl2, snapshot_communities (set of nodes)
     nbNodes = len(allNodes)
 
-    a = len((allNodes - cl) - clKnown) / nbNodes
-    b = len(clKnown - cl) / nbNodes
-    c = len(cl - clKnown) / nbNodes
-    d = len(cl & clKnown) / nbNodes
+    a = len((set(allNodes) - set(cl)) - set(clKnown)) / nbNodes
+    b = len(set(clKnown) - set(cl)) / nbNodes
+    c = len(set(cl) - set(clKnown)) / nbNodes
+    d = len(set(cl) & set(clKnown)) / nbNodes
 
     if __partial_entropy_a_proba(a) + __partial_entropy_a_proba(d) > __partial_entropy_a_proba(
             b) + __partial_entropy_a_proba(c):
-        entropyKnown = sp.stats.entropy([len(clKnown) / nbNodes, 1 - len(clKnown) / nbNodes], base=logBase)
-        conditionalEntropy = sp.stats.entropy([a, b, c, d], base=logBase) - entropyKnown
+        entropyKnown = entropy([len(clKnown) / nbNodes, 1 - len(clKnown) / nbNodes], base=logBase)
+        conditionalEntropy = entropy([a, b, c, d], base=logBase) - entropyKnown
         # print("normal",entropyKnown,sp.stats.entropy([a,b,c,d],base=logBase))
     else:
-        conditionalEntropy = sp.stats.entropy([len(cl) / nbNodes, 1 - len(cl) / nbNodes], base=logBase)
+        conditionalEntropy = entropy([len(cl) / nbNodes, 1 - len(cl) / nbNodes], base=logBase)
     # print("abcd",a,b,c,d,conditionalEntropy,cl,clKnown)
 
     return conditionalEntropy  # *nbNodes
@@ -106,8 +107,8 @@ if __name__=='__main__':
              [3, 4, 5, 6, 7],
              [6, 7, 8, 9]]
     cover_ref = [[1, 2, 3, 4],
-                 [5, 6, 7, 8, 9],
-                 [7, 8, 9]]
+                 [3, 4, 5, 6, 8],
+                 [6, 7, 8, 9]]
     print onmi(cover, cover_ref)
     # from sklearn import metrics
     # print metrics.normalized_mutual_info_score(cover, cover_ref)

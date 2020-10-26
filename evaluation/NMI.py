@@ -89,7 +89,7 @@ def NMI_2(com, real_com):
 
 
 if __name__ == '__main__':
-    A = np.array([1, 2, 1])
+    A = np.array([1, 2, 2])
     B = np.array([1, 1, 1])
     print NMI(A, B)  # 0.364561771857
     print NMI_2(A, B)

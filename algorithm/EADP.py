@@ -109,6 +109,7 @@ def calculate_dist_ij(nodei, nodej):
 def init_dist_martix():
     n = len(G.nodes)
     # 这里需要注意一点，因为使用了二维数组存储节点之间的dist数据，所以节点必须以数字表示，
+    # 并且节点的下标必须是以0或者1开始
     # 对于非数字的graph，需要map转换一下
     dist_martix = [[0 for i in range(n + 1)] for i in range(n + 1)]
     ls_martix = [[0 for i in range(n + 1)] for i in range(n + 1)]
@@ -295,8 +296,8 @@ def node_p_1_g_1_to_xy(nodes_info_list):
     return x, y, z
 
 x, y, z = node_p_1_g_1_to_xy(all_nodes_info_list)
-# show_data(xmax=len(x), x=x, y=y)
-# show_data(xmax=len(x), x=x, y=z)
+show_data(xmax=len(x), x=x, y=y)
+show_data(xmax=len(x), x=x, y=z)
 
 # 讲道理这里应该还需要过滤一些更不不可能成为clustering node的节点
 # todo 有待确认论文中的逻辑是否是这样的？？？？
@@ -372,8 +373,8 @@ def nodes_r_node_dr_to_xy(nodes_info_list):
 
 
 x, y, z = nodes_r_node_dr_to_xy(filter_nodes_info_list)
-# show_data(xmax=len(x), x=x, y=y)
-# show_data(xmax=len(x), x=x, y=z)
+show_data(xmax=len(x), x=x, y=y)
+show_data(xmax=len(x), x=x, y=z)
 
 # ================================================================================
 # 以上的所有代码应该是初始化好了所有的节点的信息，
@@ -574,6 +575,9 @@ def second_step():
                     nodei_membership = node_membership_dict.get(nodei_community)
                     node_membership_dict.pop(nodei_community)
                     for community_c in node_membership_dict:
+                        if nodei_membership == 0.0:
+                            # todo 这里会存在nodei_membership为0的情况，到时候再排查一下原因，先暂定跳过
+                            break
                         t = node_membership_dict.get(community_c) / nodei_membership
                         if (t >= c):
                             # 说明需要将该节点划分到对应的社区

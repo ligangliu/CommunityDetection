@@ -8,41 +8,58 @@ import networkx as nx
     G:vertex-neighbors {vertex:list(neighbors)}
 """
 
-def cal_EQ(cover, G):
-    vertex_community = defaultdict(lambda: set())
-    for i, c in enumerate(cover):
-        for v in c:
-            vertex_community[v].add(i)
+# 对于重叠社区的模块度
+def cal_EQ(partition, G):
+    m = len(G.edges(None, False))
+    # 统计每个节点分在共有几个社区
+    node_dict = {}
+    for node in G.nodes:
+        t = 0
+        for community in partition:
+            if node in community:
+                t += 1.0
+        node_dict[node] = t
 
-    m = 0.0
-    for v, neighbors in G.items():
-        for n in neighbors:
-            if v > n:
-                m += 1
+    def cal_ekk(c_k):
+        community = partition[c_k]
+        sum = 0.0
+        for i in range(len(community)):
+            for j in range(len(community)):
+                if (i != j and G.has_edge(community[i], community[j])):
+                    wik = 1.0 / node_dict[community[i]]
+                    wjk = 1.0 / node_dict[community[j]]
+                    sum += (wik + wjk) / 2
+        return sum / 2
 
-    total = 0.0
-    for c in cover:
-        for i in c:
-            o_i = len(vertex_community[i])
-            k_i = len(G[i])
-            for j in c:
-                o_j = len(vertex_community[j])
-                k_j = len(G[j])
-                if i > j:
-                    continue
-                t = 0.0
-                if j in G[i]:
-                    t += 1.0/(o_i*o_j)
-                t -= k_i*k_j/(2*m*o_i*o_j)
-                if i == j:
-                    total += t
-                else:
-                    total += 2*t
+    def cal_ekout(c_k):
+        sum = 0.0
+        for nodei in partition[c_k]:
+            for i in range(len(partition)):
+                if i != c_k:
+                    for nodej in partition[i]:
+                        if G.has_edge(nodei, nodej):
+                            wik = 1.0 / node_dict[nodei]
+                            wjk = 1.0 / node_dict[nodej]
+                            sum += (wik + (1-wjk))
+        return sum
 
-    return round(total/(2*m), 4)
+    a = []
+    e = []
+    for i in range(len(partition)):
+        ekk = cal_ekk(i)
+        ekout = cal_ekout(i)
+        e.append(ekk / m)
+        dk = 2*ekk + ekout
+        a.append(dk / (2 * m))
+
+    q = 0.0
+    for ei, ai in zip(e, a):
+        q += (ei - ai ** 2)
+    return q
 
 
 if __name__=='__main__':
-    G = nx.barbell_graph(3, 0)
-    print cal_EQ([[0, 1, 2], [3, 4, 5]], G)
-    print nx.algorithms.community.modularity(G, [{0, 1, 2}, {3, 4, 5}])
+    pass
+    # G = nx.read_gml("../datasets/karate.gml", label="id")
+    # print cal_EQ([[12, 17, 6, 7, 10, 13, 18, 22, 5, 11, 29, 9, 20, 14, 3, 8, 2, 4, 1],
+    #               [25, 26, 27, 28, 10, 15, 16, 19, 21, 23, 31, 32, 29, 9, 24, 30, 3, 33, 34]], G)
