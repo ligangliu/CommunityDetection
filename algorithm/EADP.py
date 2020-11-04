@@ -242,7 +242,7 @@ def init_all_nodes_info():
         # 当揉为最大的时候，取最大的dist
         if i == len(res) - 1:
             # todo ????? 这里应该是有问题的，不能取最大的，因为这里取最大的会导致下面的归一化的时候出现问题。暂定这里取出0试一试
-            # max_dist = res[i-1].node_g
+            max_dist = res[i-1].node_g
             res[i].node_g = max_dist
             all_node_g.append(max_dist)
         else:
@@ -251,6 +251,9 @@ def init_all_nodes_info():
             # 因为res是根据揉排好序的，所有i之后的所有节点对应的揉都是大于当前的
             node_list = [res[x].node for x in range(i + 1, len(res))]
             node_g = calculate_node_g(node, node_list)
+            # todo 想不通为什么这里会有计算出node_g = 10.0的情况？？？？
+            if node_g == 10.0:
+                node_g = res[i-1].node_g
             all_node_g.append(node_g)
             node_info.node_g = node_g
     # 4) 对所有的节点的伽马进行归一化，并且求出r
@@ -290,7 +293,7 @@ def node_p_1_g_1_to_xy(nodes_info_list):
         x.append(count)
         y.append(node_info.node_p_1)
         z.append(node_info.node_g_1)
-        print node_info.node, node_info.node_p_1, node_info.node_g_1
+        # print node_info.node, node_info.node_p_1, node_info.node_g_1
         count += 1
     return x, y, z
 
@@ -372,8 +375,8 @@ def nodes_r_node_dr_to_xy(nodes_info_list):
 
 
 x, y, z = nodes_r_node_dr_to_xy(filter_nodes_info_list)
-show_data(xmax=len(x), x=x, y=y)
-show_data(xmax=len(x), x=x, y=z)
+# show_data(xmax=len(x), x=x, y=y)
+# show_data(xmax=len(x), x=x, y=z)
 
 # ================================================================================
 # 以上的所有代码应该是初始化好了所有的节点的信息，
@@ -612,3 +615,8 @@ for key, value in community_nodes_dict.items():
     print "community: " + str(key)
     print value
     print "---------------------------"
+a = {2:4, 3:6, 4:9, 5:3, 6:2, 1:7, 7:1, 8:8}
+
+for key, value in community_nodes_dict.items():
+    for node in value:
+        print node, a.get(key)

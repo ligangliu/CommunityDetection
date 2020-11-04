@@ -19,8 +19,8 @@ print G.nodes(data=True)
 print len(G.edges)
 for edge in G.edges:
     print edge
-# node_groups = nx.get_node_attributes(G, 'value')
-# print node_groups
+node_groups = nx.get_node_attributes(G, 'value')
+print node_groups
 # print list(G.nodes)
 # print list(G.edges)
 # def clone_graph(G):

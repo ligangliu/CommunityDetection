@@ -1,7 +1,7 @@
 The file football.gml contains the network of American football games
 between Division IA colleges during regular season Fall 2000, as compiled
 by M. Girvan and M. Newman.  The nodes have values that indicate to which
-conferences they belong.  The values are as follows:
+conferences they belong.  The values are as follows: https://blog.csdn.net/redhatforyou/article/details/76423188(图片数据集)
 
   0 = Atlantic Coast
   1 = Big East
