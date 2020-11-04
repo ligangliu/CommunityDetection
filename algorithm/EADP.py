@@ -179,7 +179,7 @@ def calculate_node_knn_neighbor(nodei):
     knn_nodes = [node for node in G.nodes if node != nodei]
     # 得到节点的所有邻居节点之间的dist
     node_neighbors_dist_tuple_list = [(x, dist_martix[nodei][x]) for x in knn_nodes]
-    # 对所有的邻居节点进行排序
+    # 对所有的邻居节点进行排序········································
     node_neighbors_dist_tuple_list = sorted(node_neighbors_dist_tuple_list, key=lambda x: x[1])
     # 找到最小的k个邻居节点
     res = []
