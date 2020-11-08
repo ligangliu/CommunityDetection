@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-#
 
 # -------------------------------------------------------------------------------
+# https://blog.csdn.net/qq_40587374/article/details/86597293(数据集图)
 # Author:       liuligang
 # Date:         2020/9/14
 # -------------------------------------------------------------------------------
@@ -27,11 +28,11 @@ def show_data(xmin=0, xmax=1, ymin=0, ymax=1, x=None, y=None):
 
 
 G = nx.Graph()
-# G.add_edges_from([(1, 2), (1, 3), (1, 4), (1, 8),
-#                   (2, 3), (2, 4),
-#                   (3, 5), (3, 6), (3, 7),
-#                   (4, 5), (4, 7), (4, 9), (4, 10),
-#                   (5, 7)], weight=1.0)
+G.add_edges_from([(1, 2), (2, 3), (2, 4), (2, 5),
+                  (2, 6), (2, 7),
+                  (7, 8), (8, 9), (9, 10), (9, 11), (9, 12),
+                  (9, 13), (9, 14), (9, 15),
+                  (9, 16)], weight=1.0)
 G = nx.read_gml("../datasets/football.gml", label="id")
 for edge in G.edges:
     G[edge[0]][edge[1]]['weight'] = 1.0
@@ -68,12 +69,20 @@ def calculate_cc_ij(nodei, nodej):
     return res
 
 
-# todo 有待确认是否是这么计算的？我看论文大概的意思就是这个
 def calculate_node_outgoing_weight(node):
     res = 0.0
     for n in G.neighbors(node):
         res = res + G[node][n]['weight']
     return res
+
+# 计算整个网络的权重和
+all_outgoing_weight = 0
+for node in G.nodes:
+    temp = 0
+    for n in G.neighbors(node):
+        temp = temp + G[node][n]['weight']
+    all_outgoing_weight += temp
+all_outgoing_weight = all_outgoing_weight / 2
 
 
 # 计算ls(i, j)，同时考虑直接链接权重和共同节点的共享，所以讲道理这个函数是考虑的cc(i,j)和i,j的之间的权重值
@@ -158,6 +167,8 @@ class NodeInfo(object):
         self.node_g_1 = 0.0  # 表示的归一化之后的伽马
         self.node_r = 0.0  # 表示的就是归一化之后的揉*伽马
         self.node_dr = 0.0
+        self.node_w = 0 # 表示某个节点的所占的权重
+        self.node_w_1 = 0
         self.is_center_node = False  # 表示该节点是否为中心节点，默认都不是，因为中心节点是需要选出来的
         self.is_enveloped_node = True  # 是否为包络节点（讲道理，这里是不是定义为是否为重叠节点更加合适？论文是这么定义的）
         self.communities = []  # 表示每个节点划分的社区编号，因为是重叠社区，一个节点可能隶属多个社区
@@ -174,9 +185,9 @@ class NodeInfo(object):
 
 # 计算一个节点的knn的邻居节点的集合 todo 这个方法有很严重的歧义，中英文版的论文给的不一样
 def calculate_node_knn_neighbor(nodei):
-    # knn_nodes = nx.neighbors(G, nodei)
+    knn_nodes = nx.neighbors(G, nodei)
     # 我个人觉得这里不一定是邻居节点,应该是将所有的节点的dist进行排序，取最近的k个节点
-    knn_nodes = [node for node in G.nodes if node != nodei]
+    # knn_nodes = [node for node in G.nodes if node != nodei]
     # 得到节点的所有邻居节点之间的dist
     node_neighbors_dist_tuple_list = [(x, dist_martix[nodei][x]) for x in knn_nodes]
     # 对所有的邻居节点进行排序········································
@@ -184,7 +195,9 @@ def calculate_node_knn_neighbor(nodei):
     # 找到最小的k个邻居节点
     res = []
     k = len(node_neighbors_dist_tuple_list)
-    knn = calculate_knn()
+    # todo 这里还是有问题的,需要好好分析一下这里
+    # knn = calculate_knn()
+    knn = k
     # 如果不够就取所有的
     if k < knn:
         knn = k
@@ -211,25 +224,37 @@ def calculate_nodep(node):
 def init_all_nodes_info():
     res = []
     all_node_p = []
+    all_node_w = []
     # 1) 初始化所有的
     for node in G.nodes:
         node_p = calculate_nodep(node)
+        node_w = calculate_node_outgoing_weight(node)
         t = NodeInfo()
         t.node = node
         t.node_p = node_p
+        t.node_w = node_w
         res.append(t)
         all_node_p.append(node_p)
+        all_node_w.append(node_w)
+
     # 2) 对揉进行归一化
     min_node_p = min(all_node_p)
     max_node_p = max(all_node_p)
+    min_node_w = min(all_node_w)
+    max_node_w = max(all_node_w)
     for node_info in res:
         node_p = node_info.node_p
         node_p_1 = (node_p - min_node_p) / (max_node_p - min_node_p)
         node_info.node_p_1 = node_p_1
+        node_w = node_info.node_w
+        node_w_1 = (node_w - min_node_w) / (max_node_w - min_node_w)
+        node_info.node_w_1 = node_w_1
 
     # 3) 初始化所有节点的伽马
     # 计算每个节点的伽马函数，由于这个方法外部不会调用，就暂且定义在方法内部吧，问题不大！
     def calculate_node_g(nodei, node_list):
+        if len(node_list) == 0:
+            return 1.0/b
         temp = []
         for nodej in node_list:
             temp.append(dist_martix[nodei][nodej])
@@ -241,18 +266,16 @@ def init_all_nodes_info():
     for i in range(len(res)):
         # 当揉为最大的时候，取最大的dist
         if i == len(res) - 1:
-            # todo ????? 这里应该是有问题的，不能取最大的，因为这里取最大的会导致下面的归一化的时候出现问题。暂定这里取出0试一试
-            max_dist = res[i-1].node_g
-            res[i].node_g = max_dist
-            all_node_g.append(max_dist)
+            res[i].node_g = max(all_node_g)
+            all_node_g.append(res[i].node_g)
         else:
             node_info = res[i]
             node = node_info.node
-            # 因为res是根据揉排好序的，所有i之后的所有节点对应的揉都是大于当前的
-            node_list = [res[x].node for x in range(i + 1, len(res))]
+            # 因为res是根据揉排好序的，所有i之后的所有节点对应的揉都是大于当前的, 这里应该是需要加上后面的if
+            node_list = [res[x].node for x in range(i + 1, len(res)) if res[x].node_p > node_info.node_p]
             node_g = calculate_node_g(node, node_list)
             # todo 想不通为什么这里会有计算出node_g = 10.0的情况？？？？
-            if node_g == 10.0:
+            if node_g == 1.0/b:
                 node_g = res[i-1].node_g
             all_node_g.append(node_g)
             node_info.node_g = node_g
@@ -264,7 +287,7 @@ def init_all_nodes_info():
         node_g_1 = (node_g - min_node_g) / (max_node_g - min_node_g)
         node_info.node_g_1 = node_g_1
         # 且顺便计算出node_r
-        node_r = node_info.node_p_1 * node_info.node_g_1
+        node_r = node_info.node_p_1 * node_info.node_g_1 * node_info.node_w_1
         node_info.node_r = node_r
     return res
 
@@ -375,8 +398,8 @@ def nodes_r_node_dr_to_xy(nodes_info_list):
 
 
 x, y, z = nodes_r_node_dr_to_xy(filter_nodes_info_list)
-# show_data(xmax=len(x), x=x, y=y)
-# show_data(xmax=len(x), x=x, y=z)
+show_data(xmax=len(x), x=x, y=y)
+show_data(xmax=len(x), x=x, y=z)
 
 # ================================================================================
 # 以上的所有代码应该是初始化好了所有的节点的信息，
@@ -468,12 +491,18 @@ def first_step():
     for node_info in all_nodes_info_list:
         if node_info.is_center_node == False:
             community = -1
-            min_dist = sys.maxsize
+            min_dist = -1000000
             # todo 这里什么叫距离最近，局部密度更改的节点？先按距离排序，再按局部密度排序？？？
             for node in center_node_dict.keys():
-                if dist_martix[node_info.node][node] < min_dist:
+                # todo 11.8 这里明显有点问题，不能这么弄，因为dist的值只是表示两个节点通过邻居节点进行的一种联系，讲道理这里不应该只是这个，比如两个节点之间直接相连反而会低于有邻居的情况
+                # todo 11.8 在这里加上一个节点i和节点j之间的权重，因为在first_step()对于一些边上的节点可能会导致因为有一个公共邻居而使得结果反而优先于直接相连的情况
+                node_ij_weight = 0.0
+                if G.has_edge(node_info.node, node):
+                    node_ij_weight = G[node_info.node][node]['weight']
+                ls_ij = ls_martix[node_info.node][node] + node_ij_weight
+                if ls_ij > min_dist:
                     community = center_node_dict.get(node)
-                    min_dist = dist_martix[node_info.node][node]
+                    min_dist = ls_ij
             node_info.communities.append(community)
             # 这个结构主要是下面判断一个节点是否为包络节点需要使用到，所以在这里返回出去
             node_community_dict[node_info.node] = community
@@ -613,10 +642,10 @@ for node_info in all_nodes_info_list:
 # 打印每个社区编号，以及分配到该社区的节点信息
 for key, value in community_nodes_dict.items():
     print "community: " + str(key)
-    print value
+    s = ""
+    value = sorted(value)
+    for x in value:
+        s += str(x) + " "
+    print s
+    # print value
     print "---------------------------"
-a = {2:4, 3:6, 4:9, 5:3, 6:2, 1:7, 7:1, 8:8}
-
-for key, value in community_nodes_dict.items():
-    for node in value:
-        print node, a.get(key)

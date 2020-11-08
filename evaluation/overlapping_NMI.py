@@ -26,10 +26,10 @@ def __cover_entropy(cover, allNodes):  # cover is a list of set, no com ID
 def __com_pair_conditional_entropy(cl, clKnown, allNodes):  # cl1,cl2, snapshot_communities (set of nodes)
     nbNodes = len(allNodes)
 
-    a = len((set(allNodes) - set(cl)) - set(clKnown)) / nbNodes
-    b = len(set(clKnown) - set(cl)) / nbNodes
-    c = len(set(cl) - set(clKnown)) / nbNodes
-    d = len(set(cl) & set(clKnown)) / nbNodes
+    a = float(len((allNodes - cl) - clKnown)) / nbNodes
+    b = float(len(clKnown - cl)) / nbNodes
+    c = float(len(cl - clKnown)) / nbNodes
+    d = float(len(cl & clKnown)) / nbNodes
 
     if __partial_entropy_a_proba(a) + __partial_entropy_a_proba(d) > __partial_entropy_a_proba(
             b) + __partial_entropy_a_proba(c):
@@ -102,16 +102,14 @@ def onmi(cover, coverRef, allNodes=None, variant="LFK"):  # cover and coverRef s
         raise Exception("incorrect NMI")
     return NMI
 
-if __name__=='__main__':
-    cover = [[1, 2, 3, 4],
-             [3, 4, 5, 6, 7],
-             [6, 7, 8, 9]]
-    cover_ref = [[1, 2, 3, 4],
-                 [3, 4, 5, 6, 8],
-                 [6, 7, 8, 9]]
+
+if __name__ == '__main__':
+    cover = [{1, 2, 3, 4},
+             {3, 4, 5, 6, 7},
+             {6, 7, 8, 9}]
+    cover_ref = [{1, 2, 3, 4},
+                 {3, 4, 5, 6, 8},
+                 {6, 7, 8, 9}]
     print onmi(cover, cover_ref)
     # from sklearn import metrics
     # print metrics.normalized_mutual_info_score(cover, cover_ref)
-
-
-
