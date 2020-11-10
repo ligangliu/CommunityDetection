@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import networkx as nx
 import matplotlib.pyplot as plt
+import time
+from functools import wraps
 
 ##############################################################################
 # 以下的代码是协助我们对网络的数据进行分析，避免每次重复去查找网络图
@@ -9,6 +11,7 @@ import matplotlib.pyplot as plt
 G = nx.read_gml("../datasets/karate.gml", label="id")
 print "总共节点个数：" + str(len(G.nodes))
 print "总共边的条数：" + str(len(G.edges))
+
 
 
 # 得到每个社区对应的节点集合
@@ -67,7 +70,8 @@ def sub_douhao(nodes=[]):
     return res
 
 
-# if __name__ == '__main__':
-#     str1 = "17 20 27 56 62 65 70 76 87 95 96 113"
-#     get_node_neighbors(add_douhao(str1))
+if __name__ == '__main__':
+    str1 = "17 20 27 56 62 65 70 76 87 95 96 113"
+    a ={1:2, 3:4}
+    print a
 
