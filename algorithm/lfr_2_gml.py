@@ -13,17 +13,35 @@ import networkx as nx
 from collections import defaultdict
 import time
 from functools import wraps
+import platform
+import os
+
+
+def init_path():
+    run_platform = "windows"
+    if platform.system().lower() == 'windows':
+        path = "./datasets/"
+    elif platform.system().lower() == 'linux':
+        path = "/app/datasets/"
+        run_platform = "linux"
+    return path, run_platform
+
+path, run_platform = init_path()
+
 
 def timefn(fn):
     """计算性能的修饰器"""
+
     @wraps(fn)
     def measure_time(*args, **kwargs):
         t1 = time.time()
         result = fn(*args, **kwargs)
         t2 = time.time()
-        print "@timefn: %s: take %d s" %(fn.__name__, t2-t1)
+        print "@timefn: %s: take %d s" % (fn.__name__, t2 - t1)
         return result
+
     return measure_time
+
 
 @timefn
 def transfer_2_gml(need_write_gml=False):
@@ -35,7 +53,7 @@ def transfer_2_gml(need_write_gml=False):
     nodes_labels = {}
     k = 0
     overlapping_node_dict = {}
-    with open("../datasets/community.dat", "r") as f:
+    with open(path + "community.nmc", "r") as f:
         for line in f.readlines():
             items = line.strip("\r\n").split("\t")
             node = items[0]
@@ -47,9 +65,9 @@ def transfer_2_gml(need_write_gml=False):
     # end-with
     G = nx.Graph()
     for v in nodes_labels.keys():  # 添加所有的节点，并且记录其真实标签
-        G.add_node(int(v), value=nodes_labels[v][0]) # 一个节点(重叠节点)可能会存在多个社区标签，所以value应该是一个list
+        G.add_node(int(v), value=nodes_labels[v][0])  # 一个节点(重叠节点)可能会存在多个社区标签，所以value应该是一个list
     edges = set()
-    with open("../datasets/network.dat", "r") as f:
+    with open(path + "community.nse", "r") as f:
         for line in f.readlines():
             if line.startswith("#"):
                 continue
@@ -65,7 +83,7 @@ def transfer_2_gml(need_write_gml=False):
         a, b = e
         G.add_edge(a, b, type="Undirected", weight=1.0)
     if need_write_gml:
-        nx.write_gml(G, "../datasets/lfr-1.gml")
+        nx.write_gml(G, path + "lfr-1.gml")
 
     communities = defaultdict(lambda: [])
     for v in nodes_labels.keys():
@@ -82,16 +100,20 @@ def transfer_2_gml(need_write_gml=False):
         overlapping_nodes.append(int(overlapping_node))
     overlapping_nodes = sorted(overlapping_nodes)
     print overlapping_nodes
+    file_handle = open(path + "/lfr_true.txt", mode="w")
     for key, value in communities.items():
         # print "community: " + str(key)
-        s = ""
         value = sorted(value)
+        to_join_list = []
         for x in value:
-            s += str(x) + " "
+            to_join_list.append(str(x))
+        s = " ".join(to_join_list)
         print s
+        file_handle.write(s + "\n")
         # print value
         # print "---------------------------"
     return G, overlapping_nodes
+
 
 def overlapping_mapping_sum(a=[], b=[]):
     sum = 0
@@ -101,6 +123,6 @@ def overlapping_mapping_sum(a=[], b=[]):
     return sum
 
 
-
 if __name__ == '__main__':
-    G, overlapping_nodes = transfer_2_gml(True)
+    G, overlapping_nodes = transfer_2_gml(False)
+    print "ffff"
