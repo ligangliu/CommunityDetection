@@ -461,6 +461,8 @@ def calculate_zeor_ls_with_center_node(center_nodes=[], all_nodes=[]):
                 all_ls_zero_nodes.append(node)
     return all_ls_zero_nodes
 
+
+# 将一些与中心节点的ls距离都是0的值进行划分，不能随意简单的划分
 def divide_ls_zero_node(node, all_nodes_info_list, node_community_dict, center_nodes_community):
     index = 0
     length = len(all_nodes_info_list)
