@@ -2,6 +2,7 @@
 
 # -------------------------------------------------------------------------------
 # https://blog.csdn.net/qq_40587374/article/details/86597293(数据集图)
+# 其中dolphins的数据图比真实的的数据集标签多1
 # Author:       liuligang
 # Date:         2020/9/14
 # -------------------------------------------------------------------------------
@@ -11,10 +12,25 @@ import networkx as nx
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from lfr_2_gml import timefn
+
+from algorithm.my_objects import MyResultInof, AlgorithmParam, NodeInfo
+from my_util import timefn
 import time
-from lfr_2_gml import transfer_2_gml, path, run_platform
+from my_util import transfer_2_gml, path, run_platform
 import random
+from collections import defaultdict
+
+# 1) Distance function
+a = 0.1  # 计算cc(i,j)的时候使用的，一个较小的正值，避免分母为0的情况
+b = 0.1  # 计算dist(i, j)的时候使用的，表示当i,j时孤立的节点的时候
+# c = 0.8  # 在second_step()分配重叠节点的时候使用的。 todo 11.10 这个在论文后面的实验中有作对比
+dc = 0.2  # todo dc取多少？论文中是当dc取2%效果最佳，因为这个直接影响到计算node_p的值
+G = nx.Graph()
+node_outgoing_weight_dict = {}
+node_knn_neighbors_dict = {}
+dist_martix = None
+ls_martix = None
+all_nodes_info_list = []
 
 
 # 展示x,y的二维坐标点，用于后面的数据验证
@@ -28,29 +44,6 @@ def show_data(xmin=0, xmax=1, ymin=0, ymax=1, x=None, y=None):
     plt.ylabel("y")
     plt.plot(x, y, 'ro')
     plt.show()
-
-
-# 1) Distance function
-a = 0.1  # 计算cc(i,j)的时候使用的，一个较小的正值，避免分母为0的情况
-b = 0.1  # 计算dist(i, j)的时候使用的，表示当i,j时孤立的节点的时候
-c = 0.8  # 在second_step()分配重叠节点的时候使用的。 todo 11.10 这个在论文后面的实验中有作对比
-dc = 0.2  # todo dc取多少？论文中是当dc取2%效果最佳，因为这个直接影响到计算node_p的值
-G = nx.Graph()
-overlapping_nodes = []
-node_outgoing_weight_dict = {}
-node_knn_neighbors_dict = {}
-dist_martix = None
-ls_martix = None
-all_nodes_info_list = []
-all_nodes_info_dict = {}
-ascending_nod_p_node_id_list = []
-filter_nodes_info_list = []
-center_node_dict = {}
-node_community_dict = {}
-# 中心节点
-center_nodes = []
-# 非包络节点
-not_enveloped_nodes = []
 
 
 # 计算G中最大权重
@@ -153,33 +146,6 @@ def calculate_knn():
     return int(sum / len(node_degree_tuple))
 
 
-# 将节点的所有信息统一定义为一个类，之后节点想过的所有信息应该统一放在NodeInfo中
-class NodeInfo(object):
-
-    def __init__(self):
-        self.node = None
-        self.node_p = 0.0  # 表示的就是节点的揉
-        self.node_g = 0.0  # 表示的就是节点的伽马
-        self.node_p_1 = 0.0  # 表示的归一化之后的揉
-        self.node_g_1 = 0.0  # 表示的归一化之后的伽马
-        self.node_r = 0.0  # 表示的就是归一化之后的揉*伽马
-        self.node_dr = 0.0
-        self.node_w = 0.0  # 表示某个节点的所占的权重
-        self.node_w_1 = 0.0
-        self.is_center_node = False  # 表示该节点是否为中心节点，默认都不是，因为中心节点是需要选出来的
-        self.is_enveloped_node = True  # 是否为包络节点（讲道理，这里是不是定义为是否为重叠节点更加合适？论文是这么定义的）
-        self.communities = []  # 表示每个节点划分的社区编号，因为是重叠社区，一个节点可能隶属多个社区
-
-    def gatherAttrs(self):
-        return ",".join("{}={}"
-                        .format(k, getattr(self, k))
-                        for k in self.__dict__.keys())
-
-    # 对节点的信息打印重写，方便程序打印输出
-    def __str__(self):
-        return "[{}:{}]".format(self.__class__.__name__, self.gatherAttrs())
-
-
 # 计算一个节点的knn的邻居节点的集合 todo 这个方法有很严重的歧义，中英文版的论文给的不一样
 def calculate_node_knn_neighbor(nodei):
     knn_nodes = nx.neighbors(G, nodei)
@@ -202,8 +168,6 @@ def calculate_node_knn_neighbor(nodei):
     return res
 
 
-
-
 # 计算每个节点的揉
 def calculate_nodep(node):
     # 找到最小的k个邻居节点，这里不按照论文的来，这里就是算所有邻居节点
@@ -221,7 +185,7 @@ def calculate_nodep(node):
 
 # 初始化所有的节点的信息
 @timefn
-def init_all_nodes_info():
+def init_all_nodes_info(node_g_weight=2):
     res = []
     all_node_p = []
     all_node_w = []
@@ -258,9 +222,7 @@ def init_all_nodes_info():
             return 1.0 / b
         temp = []
         for nodej in node_list:
-            # todo 11.10 这里乘以2的原因是，在一个社区里面，如果有两个带头大哥，我要尽量的将第二个带太大哥的重要性降低，所以我在这里乘以2将这个重要程度尽量放大
-            # 并且这个我已经从实验数据debug证明了
-            temp.append(2 * dist_martix[nodei][nodej])
+            temp.append(node_g_weight * dist_martix[nodei][nodej])
         return min(temp)
 
     # 按照所有节点的揉进行升序排序
@@ -319,7 +281,6 @@ def node_p_1_g_1_to_xy(nodes_info_list):
 # 讲道理这里应该还需要过滤一些更不不可能成为clustering node的节点
 # todo 有待确认论文中的逻辑是否是这样的？？？？
 def filter_corredpond_nodes(all_nodes_info_list):
-    sum_node_r = 0.0
     all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_p)
     count = int(0.8 * len(all_nodes_info_list))
     sum_node_p = 0.0
@@ -345,7 +306,7 @@ def filter_corredpond_nodes(all_nodes_info_list):
 
 
 # 初始化所有的节点的node_dr信息，并返回最大的node_dr以及对应的index
-def init_filter_nodes_dr():
+def init_filter_nodes_dr(filter_nodes_info_list):
     # 第一个节点应该是没有node_dr的，所以从第二个节点开始
     for i in range(1, len(filter_nodes_info_list)):
         a = filter_nodes_info_list[i - 1]
@@ -432,9 +393,10 @@ def selec_center(node_info_list, averge_node_r):
 
 
 # 初始化所有的中心节点,因为后面的节点划分社区都需要用到这个
-def init_center_node(filter_nodes_info_list_index):
+def init_center_node(filter_nodes_info_list_index, filter_nodes_info_list, all_nodes_info_dict):
     center_node_dict = {}
     comunity = 1
+    # 因为从 filter_node_info_list_index 到最后都是中心节点
     for i in range(filter_nodes_info_list_index, len(filter_nodes_info_list)):
         filter_node_info = filter_nodes_info_list[i]
         node_info = all_nodes_info_dict.get(filter_node_info.node)
@@ -476,7 +438,7 @@ def divide_ls_zero_node(node, all_nodes_info_list, node_community_dict, center_n
     min_dist = 1000
     community = -1
     lg_node_p_list = []
-    for i in range(index+1, length):
+    for i in range(index + 1, length):
         node_info = all_nodes_info_list[i]
         if node_info.node_p > waiting_node_p:
             lg_node_p_list.append(all_nodes_info_list[i])
@@ -494,28 +456,27 @@ def divide_ls_zero_node(node, all_nodes_info_list, node_community_dict, center_n
         community = random.choice(center_nodes_community)
     waiting_node_info.communities.append(community)
     # 这个结构主要是下面判断一个节点是否为包络节点需要使用到，所以在这里返回出去
-    node_community_dict[waiting_node] = community
+    node_community_dict[waiting_node] = [community]
 
 
 # 第一步将所有的非中心节点进行划分
 @timefn
-def first_step():
-    # todo 11.11 这里有一点问题。。。。
-    node_community_dict = center_node_dict.copy()
-    all_ls_zero_nodes = calculate_zeor_ls_with_center_node(list(node_community_dict.keys()), list(G.nodes))
-    print "以下的节点和所有的中心节点的值都是0"
-    print all_ls_zero_nodes
+def first_step(center_node_dict):
+    # node_community_dict 就是记录所有的节点的划分的社区信息{}, 因为很多地方会使用到这个
+    # node_community_dict = center_node_dict.copy()
+    node_community_dict = defaultdict(list)
+    for node in center_node_dict.keys():
+        node_community_dict[node] = [center_node_dict[node]]
+    ls_zero_nodes = calculate_zeor_ls_with_center_node(list(node_community_dict.keys()), list(G.nodes))
 
     for node_info in all_nodes_info_list:
         waiting_node = node_info.node
         # 1) 先将所有的非中心节点且不是到所有的中心节点都不是零的值先进行划分
-        if not node_info.is_center_node and waiting_node not in all_ls_zero_nodes:
+        if not node_info.is_center_node and waiting_node not in ls_zero_nodes:
             community = -1
             min_dist = -1000000
-            # todo 这里什么叫距离最近，局部密度更改的节点？先按距离排序，再按局部密度排序？？？
             for node in center_node_dict.keys():
-                # todo 11.8 这里明显有点问题，不能这么弄，因为dist的值只是表示两个节点通过邻居节点进行的一种联系，讲道理这里不应该只是这个，比如两个节点之间直接相连反而会低于有邻居的情况
-                # todo 11.8 在这里加上一个节点i和节点j之间的权重，因为在first_step()对于一些边上的节点可能会导致因为有一个公共邻居而使得结果反而优先于直接相连的情况
+                # todo 11.8 在这里加上一个节点i和节点j之间的权重，因为在first_step()对于一些边上的节点可能会导致因为有一个公共邻居而使得结果反而优先于直接相连(这是因为直接相连的权重不够)的情况
                 node_ij_weight = 0.0
                 if G.has_edge(waiting_node, node):
                     node_ij_weight = G[waiting_node][node]['weight']
@@ -526,29 +487,30 @@ def first_step():
                     min_dist = ls_ij
             node_info.communities.append(community)
             # 这个结构主要是下面判断一个节点是否为包络节点需要使用到，所以在这里返回出去
-            node_community_dict[waiting_node] = community
-    # 2) 将所有的零节点划分
-    for ls_zeor_node in all_ls_zero_nodes:
+            node_community_dict[waiting_node] = [community]
+
+    # 2) 将所有的零节点(也就是该节点到所有的中心节点都的强度都是0)划分
+    for ls_zeor_node in ls_zero_nodes:
         # 中心节点划分的社区
         center_nodes_community = list(center_node_dict.values())
         divide_ls_zero_node(ls_zeor_node, all_nodes_info_list, node_community_dict, center_nodes_community)
-    return node_community_dict
+    return node_community_dict, ls_zero_nodes
 
 
 # 计算每个节点的knn个邻居节点的ls的值之和
-def calculate_node_knn_neighboor_ls(nodei, knn_node_neighbors, comminity=None):
+def calculate_node_knn_neighboor_ls(nodei, knn_node_neighbors, node_community_dict, comminity=None):
     res = 0.0
     for nodej in knn_node_neighbors:
         if comminity is None:
             res += ls_martix[nodei][nodej]
         else:
-            if node_community_dict.get(nodej) == comminity:
+            if node_community_dict.get(nodej)[0] == comminity:
                 res += ls_martix[nodei][nodej]
     return res
 
 
 # 计算非包络节点的membership, 用于二次划分时将该节点划分到一个新的社区
-def calculate_node_membership(nodei):
+def calculate_node_membership(nodei, node_community_dict):
     # 得到nodei的knn的邻居节点
     # nodei_knn = calculate_node_knn_neighbor(nodei)
     nodei_knn = node_knn_neighbors_dict[nodei]
@@ -556,7 +518,7 @@ def calculate_node_membership(nodei):
     # node_knn_node_to_community_dict = [{node: node_community_dict.get(node)} for node in nodei_knn_neighbors]
     node_knn_community_to_node_dict = {}
     for nodej in nodei_knn:
-        nodej_community = node_community_dict.get(nodej)
+        nodej_community = node_community_dict.get(nodej)[0]
         if node_knn_community_to_node_dict.has_key(nodej_community):
             node_knn_community_to_node_dict.get(nodej_community).append(nodej)
         else:
@@ -569,8 +531,8 @@ def calculate_node_membership(nodei):
         for nodej in node_knn_c:
             # nodej_knn = calculate_node_knn_neighbor(nodej)
             nodej_knn = node_knn_neighbors_dict[nodej]
-            a = calculate_node_knn_neighboor_ls(nodej, nodej_knn, community_c)
-            b = calculate_node_knn_neighboor_ls(nodej, nodej_knn)
+            a = calculate_node_knn_neighboor_ls(nodej, nodej_knn, node_community_dict, community_c)
+            b = calculate_node_knn_neighboor_ls(nodej, nodej_knn, node_community_dict)
             res += ls_martix[nodei][nodej] * (a / b)
         # 更新结果
         node_membership_dict[community_c] = res
@@ -579,7 +541,8 @@ def calculate_node_membership(nodei):
 
 # 划分重叠节点出来
 @timefn
-def second_step():
+def second_step(node_community_dict, c):
+    not_enveloped_nodes = []
     for node_info in all_nodes_info_list:
         nodei = node_info.node
         if not node_info.is_center_node:
@@ -590,8 +553,9 @@ def second_step():
             same_community_sum = 0
             community_set = set()
             for node_neighbor in node_neighbors:
-                community_set.add(node_community_dict.get(node_neighbor))
-                if node_community_dict.get(node_neighbor) == community:
+                # 在没有进行seconde_step之前，node_community_dict中的节点对应划分的社区应该是只有一个的
+                community_set.add(node_community_dict.get(node_neighbor)[0])
+                if node_community_dict.get(node_neighbor)[0] == community:
                     same_community_sum += 1
             # 说明改节点和周围的所有节点在一个社区中,或者它和它的邻居有一半的社区是相同的(todo 11.10 后面这一点是我添加的)
             if same_community_sum == len(node_neighbors) or \
@@ -608,13 +572,13 @@ def second_step():
                 # nodei_knn_neighbors = calculate_node_knn_neighbor(nodei)
                 nodei_knn_neighbors = node_knn_neighbors_dict[nodei]
                 # 得到该节点的knn个最近的邻居节点的所有社区信息
-                node_knn_neighbors_community = set([node_community_dict.get(node) for node in nodei_knn_neighbors])
+                node_knn_neighbors_community = set([node_community_dict.get(node)[0] for node in nodei_knn_neighbors])
                 if community not in node_knn_neighbors_community:
                     pass
                 else:
-                    node_membership_dict = calculate_node_membership(nodei)
+                    node_membership_dict = calculate_node_membership(nodei, node_community_dict)
                     # 遍历所有的knn节点的membership值，判断该节点是否划分到多个社区
-                    nodei_community = node_community_dict.get(nodei)
+                    nodei_community = node_community_dict.get(nodei)[0]
                     nodei_membership = node_membership_dict.get(nodei_community)
                     node_membership_dict.pop(nodei_community)
                     for community_c in node_membership_dict:
@@ -625,123 +589,46 @@ def second_step():
                         if (t >= c):
                             # 说明需要将该节点划分到对应的社区
                             node_info.communities.append(community_c)
+                            # 更新一下node_community_dict，说明该节点是一个重叠节点
+                            if community_c != nodei_community:
+                                node_community_dict.get(nodei).append(community_c)
         else:
             pass
+    return not_enveloped_nodes
 
 
-# 统计一下算法发现的重叠节点和真实的重叠节点的匹配个数
+# 统计一下算法发现的重叠节点和真实的重叠节点的匹配的节点信息
 def overlapping_mapping_sum(a=[], b=[]):
-    sum = 0
+    if len(a) == 0 or len(b) == 0:
+        return []
+    mapping_overlapping_nodes = []
     for node in a:
         if node in b:
-            sum += 1
-    return sum
+            mapping_overlapping_nodes.append(node)
+    return mapping_overlapping_nodes
 
 
-def start(test_data='karate_gml'):
-    # 算法执行开始时间，统计这个算法运行花费时间
-    start_time = time.time()
-    global G, dist_martix, ls_martix
-    global overlapping_nodes, node_outgoing_weight_dict,node_knn_neighbors_dict
-    global all_nodes_info_list, all_nodes_info_dict, ascending_nod_p_node_id_list
-    global filter_nodes_info_list, center_node_dict, node_community_dict
-    global center_nodes, not_enveloped_nodes
+# 主要用于将一个集合中的所有节点进行排序，并且返回一个只包含空格的字符串(因为计算onmi的时候是这种各式)
+def trans_community_nodes_to_str(community_nodes):
+    community_nodes = sorted(community_nodes)
+    to_join_list = []
+    for node in community_nodes:
+        to_join_list.append(str(node))
+    s = " ".join(to_join_list)
+    return s
 
-    # 如果是linux环境，则自动生成网络
-    if run_platform == "linux":
-        from my_onmi import generate_network
-        generate_network()
-        # 处理LFR数据
-        G, overlapping_nodes = transfer_2_gml()
-    else:
-        G.add_edges_from([(1, 2), (2, 3), (2, 4), (2, 5),
-                          (2, 6), (2, 7),
-                          (7, 8), (8, 9), (9, 10), (9, 11), (9, 12),
-                          (9, 13), (9, 14), (9, 15), (9, 17), (9, 18), (9, 19), (9, 20),
-                          (9, 16), (12, 13), (12, 11),
-                          (12, 17), (12, 18), (12, 19), (12, 20), (12, 21), (20, 21)], weight=1.0)
-        # dolphins的数据需要在网络图上加上1，也就是网络图上40，对应的真实的数据是39
-        G = nx.read_gml(path+test_data, label="id")
-    for edge in G.edges:
-        G[edge[0]][edge[1]]['weight'] = 1.0
 
-    for node in G.nodes:
-        outgoing_weight = calculate_node_outgoing_weight(node)
-        node_outgoing_weight_dict[node] = outgoing_weight
-
-    # # 计算整个网络的权重和
-    # all_outgoing_weight = len(G.edges) * 2
-
-    # ls_martix主要在second_step中使用到了，所以在这一步也初始化好
-    dist_martix, ls_martix = init_dist_martix()
-
-    for node in G.nodes:
-        knn_neighbors = calculate_node_knn_neighbor(node)
-        node_knn_neighbors_dict[node] = knn_neighbors
-
-    # all_nodes_info_list 很重要，所有节点的信息统一放在这个list中
-    all_nodes_info_list = init_all_nodes_info()
-
-    # print_node_info()
-    # all_nodes_info_dict 便于后面从filter_node_list中通过node信息来更新到all_nodes_info_list上的信息
-    all_nodes_info_dict = {node_info.node: node_info for node_info in all_nodes_info_list}
-
-    # 这个保存一下所有节点按照揉进行排序之后的节点编号的变化信息，只是用来清晰的记录那个节点的揉的值是最大的而已
-    ascending_nod_p_node_id_list = []
-
-    # 因为此时的所有的all_nodes_info_list 是按照node_p进行升序的
-    for node_info in all_nodes_info_list:
-        ascending_nod_p_node_id_list.append(node_info.node)
-
-    print '-' * 30
-    print 'ascending_nod_p node: ' + str(ascending_nod_p_node_id_list)
-    print '-' * 30
-
-    # 按照node_r进行排序,因为论文的算法二中选择中心节点就是使用的过滤之后的节点进行筛选的
-    filter_nodes_info_list, averge_node_r = filter_corredpond_nodes(all_nodes_info_list)
-    # all_nodes_info_list = sorted(all_nodes_info_list, key=lambda x: x.node_r)
-    filter_nodes_info_list = sorted(filter_nodes_info_list, key=lambda x: x.node_r)
-
-    # 这个保存一下所有节点按照node_r进行排序之后的节点编号的变化信息，只是用来清晰的记录那个节点的揉的值是最大的而已
-    ascending_nod_r_node_id_list = []
-
-    # 因为此时的所有的all_nodes_info_list 是按照node_p进行升序的
-    for node_info in filter_nodes_info_list:
-        ascending_nod_r_node_id_list.append(node_info.node)
-    print '-' * 30
-    print 'ascending_node_r node: ' + str(ascending_nod_r_node_id_list)
-    print '-' * 30
-
-    # 初始化所有没有被过滤的节点的d伽马
-    init_filter_nodes_dr()
-
-    x, y, z = node_p_1_g_1_to_xy(all_nodes_info_list)
-    # show_data(xmax=len(x), x=x, y=y)
-    # show_data(xmax=len(x), x=x, y=z)
-
-    x, y, z = nodes_r_node_dr_to_xy(filter_nodes_info_list)
-    # show_data(xmax=len(x), x=x, y=y)
-    # show_data(xmax=len(x), x=x, y=z)
-
-    # filter_nodes_info_list_index 表示的是过滤的节点的list的下标之后的所有节点为中心节点
-    filter_nodes_info_list_index = selec_center(filter_nodes_info_list, averge_node_r)
-    print filter_nodes_info_list_index, len(filter_nodes_info_list)
-    center_node_dict = init_center_node(filter_nodes_info_list_index)
-    center_nodes = center_nodes = sorted(list(center_node_dict.keys()))
-    # 讲道理到了这一步之后，所有的节点都是已经划分了一个社区的，然后通过second_step()进行二次划分，将重叠节点找出来，并划分
-    node_community_dict = first_step()
-
-    second_step()
-
-    # 打印输出中心节点
-    print '-' * 30
-    print "center nodes: " + str(center_nodes)
-    print "not enveloped nodes: " + str(not_enveloped_nodes)
-    print '-' * 30
-
-    # 打印社区划分的节点
-    print "==================================="
+# 处理算法发现的结果(主要是直接将结果写入文件中，方便直接计算onmi，避免每次手动复制)
+def handle_result_to_txt(all_nodes_info_list, not_overlapping_community_dict):
     community_nodes_dict = {}
+    not_overlapping_community_node_dict = {}
+    for node, communities in not_overlapping_community_dict.items():
+        community = communities[0]
+        if not_overlapping_community_node_dict.has_key(community):
+            not_overlapping_community_node_dict.get(community).append(node)
+        else:
+            not_overlapping_community_node_dict[community] = [node]
+
     for node_info in all_nodes_info_list:
         node = node_info.node
         communities = node_info.communities
@@ -750,57 +637,302 @@ def start(test_data='karate_gml'):
                 community_nodes_dict.get(community).append(node)
             else:
                 community_nodes_dict[community] = [node]
-    # 打印每个社区编号，以及分配到该社区的节点信息
-    print "发现的社区个数： " + str(len(community_nodes_dict))
-    # 用于统计一下我的算法发现了多少个重叠节点
-    communities_nodes = []
 
-    # 将结果集合写入文件
+    # 将结果集合写入文件, 讲道理这里还应该将划分的非重叠社区的结果也划分进去，后面如果想统计非重叠的NMI的值也方便(以后再说吧！)
     file_handle = open(path + "lfr_code.txt", mode="w")
     for key, value in community_nodes_dict.items():
-        # print "community: " + str(key)
-        value = sorted(value)
-        communities_nodes.append(value)
-        to_join_list = []
-        for x in value:
-            to_join_list.append(str(x))
-        s = " ".join(to_join_list)
+        s = trans_community_nodes_to_str(value)
         file_handle.write(s + "\n")
-        print s
-        # print "---------------------------"
 
+    return community_nodes_dict, not_overlapping_community_node_dict
+
+
+# 统计一下算法发现的重叠节点，以及每个重叠节点所属的社区个数
+def calculate_overlapping_nodes(node_community_dict):
     find_overlapping_nodes_dict = {}
     # 记录一下重叠节点被划分到的最多的社区个数和最小的社区个数
-    min_overlapping_communites = 10000
-    max_overlapping_communites = -10000
-    for node in G.nodes:
-        temp = 0
-        for community in communities_nodes:
-            if node in community:
-                temp += 1
-        if temp >= 2:
-            if temp < min_overlapping_communites:
-                min_overlapping_communites = temp
-            if temp > max_overlapping_communites:
-                max_overlapping_communites = temp
+    min_om = 10000
+    max_om = -10000
+    for node in node_community_dict.keys():
+        communites = len(node_community_dict[node])
+        if communites >= 2:
+            if communites < min_om:
+                min_om = communites
+            if communites > max_om:
+                max_om = communites
             # 记录每个重叠节点被划分到了几个社区
-            find_overlapping_nodes_dict[node] = temp
+            find_overlapping_nodes_dict[node] = communites
+    return find_overlapping_nodes_dict, min_om, max_om
 
-    print "真实社区重叠节点个数: " + str(len(overlapping_nodes))
-    print sorted(overlapping_nodes)
-    print "算法发现的重叠节点个数: " + str(len(find_overlapping_nodes_dict))
-    print sorted(list(find_overlapping_nodes_dict.keys()))
-    print "与原重叠节点的mapping个数: " + str(
-        overlapping_mapping_sum(list(find_overlapping_nodes_dict.keys()), overlapping_nodes))
-    print "重叠节点最多划分到的社区个数: " + str(max_overlapping_communites)
-    print "重叠节点最少划分到的社区个数: " + str(min_overlapping_communites)
+
+# 就统计一下按照node_p 和 node_r 排序之后的节点信息，可能debug的时候用一下(不重要)
+def calculate_ascending_nodes(filter_nodes_info_list, all_nodes_info_list):
+    # 这个保存一下所有节点按照node_r进行排序之后的节点编号的变化信息，只是用来清晰的记录那个节点的揉的值是最大的而已
+    ascending_nod_r_nodes = []
+    # 因为此时的所有的all_nodes_info_list 是按照node_p进行升序的
+    for node_info in filter_nodes_info_list:
+        ascending_nod_r_nodes.append(node_info.node)
+    # 这个保存一下所有节点按照揉进行排序之后的节点编号的变化信息，只是用来清晰的记录那个节点的揉的值是最大的而已
+    ascending_nod_p_nodes = []
+    # 因为此时的所有的all_nodes_info_list 是按照node_p进行升序的,这里暂且只收集前百分之
+    for i in range(len(all_nodes_info_list) - len(filter_nodes_info_list), len(all_nodes_info_list)):
+        ascending_nod_p_nodes.append(all_nodes_info_list[i].node)
+    return ascending_nod_p_nodes, ascending_nod_r_nodes
+
+
+# 输出一个二维node_p_1,node_g_1, node_r,node_dr等二维图像供debug使用(不重要)
+def need_show_data(all_nodes_info_list, filter_nodes_info_list, need=False):
+    if need:
+        # (debug时使用)输出一个二维图像，按照node_p_1进行排序的节点(即参与可能被选择为中心节点的那些节点的node_p_1 和 node_g_1的图像)
+        x, y, z = node_p_1_g_1_to_xy(all_nodes_info_list)
+        show_data(xmax=len(x), x=x, y=y)
+        show_data(xmax=len(x), x=x, y=z)
+
+        # (debug时使用) 输出可能被选择为节点的noder 和 node_dr
+        x, y, z = nodes_r_node_dr_to_xy(filter_nodes_info_list)
+        show_data(xmax=len(x), x=x, y=y)
+        show_data(xmax=len(x), x=x, y=z)
+
+
+# 打印输出一些结果值，方便掌握算法执行情况
+def print_result(result, need_print):
+    if not result or not isinstance(result, MyResultInof):
+        raise Exception("你想干啥。。。。。")
+    if not need_print:
+        return
+    # 打印一些真实网络的情况
+    print '-' * 30
+    print "总共的节点个数：" + str(len(result.G.nodes))
+    print "总共的边的个数：" + str(len(result.G.edges))
+    print '-' * 30
+    print
+
+    # 打印输出中心节点
+    print '-' * 30
+    print "true communities：" + str(result.true_community_num)
+    print "find communities: " + str(len(result.center_nodes))
+    print "center nodes: " + str(result.center_nodes)
+    print "not enveloped nodes: " + str(result.not_enveloped_nodes)
+    print "ls ero nodes: " + str(result.ls_zero_nodes)
+    print '-' * 30
+    print
+
+    # 打印算法划分的结果
+    # 1) 打印非重叠社区划分的信息
+    print "--------------not overlapping nodes----------------------"
+    for community, community_nodes in result.not_overlapping_community_node_dict.items():
+        s = trans_community_nodes_to_str(community_nodes)
+        print s
+    print "---------------------------------------------------------"
+
+    # 2) 打印重叠社区划分的信息
+    print "-----------------overlapping nodes-----------------------"
+    for community, community_nodes in result.community_nodes_dict.items():
+        s = trans_community_nodes_to_str(community_nodes)
+        print s
+    print "---------------------------------------------------------"
+    print
+
+    # 打印重叠节点的情况
+    print '-' * 30
+    print "真实社区重叠节点个数: " + str(len(result.true_overlapping_nodes))
+    print sorted(result.true_overlapping_nodes)
+    print "算法发现的重叠节点个数: " + str(len(result.find_overlapping_nodes))
+    print sorted(list(result.find_overlapping_nodes))
+    print "与原重叠节点的mapping个数: " + str(len(result.mapping_overlapping_nodes))
+    print sorted(list(result.mapping_overlapping_nodes))
+    print "重叠节点最多划分到的社区个数: " + str(result.max_om)
+    print "重叠节点最少划分到的社区个数: " + str(result.min_om)
+    print "算法执行花费时间: " + str(result.spend_seconds)
+    print '-' * 30
+
+
+def start(param):
+    if not isinstance(param, AlgorithmParam):
+        raise Exception("你想搞啥呢？？？？？")
+
+    test_data = param.dataset
+    need_show_image = param.need_show_image
+
+    # 算法执行开始时间，统计这个算法运行花费时间
+    start_time = time.time()
+
+    global G, dist_martix, ls_martix
+    global node_outgoing_weight_dict, node_knn_neighbors_dict
+    global all_nodes_info_list
+
+    # result 统一保存所有的中间结果
+    result = MyResultInof()
+
+    need_print_result = True
+    # 如果是linux环境，则自动生成网络
     if run_platform == "linux":
-        from my_onmi import calculate_onmi
-        print "该程序的onmi的值：" + str(calculate_onmi())
+        need_print_result = False
+        from my_evaluation import generate_network
+        generate_network(param)
+        # 处理LFR数据
+        G, true_overlapping_nodes, true_community_num = transfer_2_gml()
+        result.true_overlapping_nodes = true_overlapping_nodes
+        result.true_community_num = true_community_num
+    else:
+        # 基本上是在window上测试使用算法是否正确的时候使用
+        G.add_edges_from([(1, 2), (2, 3), (2, 4), (2, 5),
+                          (2, 6), (2, 7),
+                          (7, 8), (8, 9), (9, 10), (9, 11), (9, 12),
+                          (9, 13), (9, 14), (9, 15), (9, 17), (9, 18), (9, 19), (9, 20),
+                          (9, 16), (12, 13), (12, 11),
+                          (12, 17), (12, 18), (12, 19), (12, 20), (12, 21), (20, 21)], weight=1.0)
+        # dolphins的数据需要在网络图上加上1，也就是网络图上40，对应的真实的数据是39
+        G = nx.read_gml(path + test_data, label="id")
+    result.G = G
 
+    # 默认边的权重为1.0
+    for edge in G.edges:
+        if G[edge[0]][edge[1]].get('weight', -1000) == -1000:
+            G[edge[0]][edge[1]]['weight'] = 1.0
+
+    # 初始化所有节点的outging_weight的值
+    for node in G.nodes:
+        outgoing_weight = calculate_node_outgoing_weight(node)
+        node_outgoing_weight_dict[node] = outgoing_weight
+
+    # 1) 初始化dist_martix，这一步是整个算法的基础，只有初始化dist_martix正确之后，后面的逻辑才走得通
+    # ls_martix主要在second_step中使用到了，所以在这一步也初始化好
+    dist_martix, ls_martix = init_dist_martix()
+
+    # 初始化好每个节点的knn_neighbors，避免后面重复计算，提高效率
+    for node in G.nodes:
+        knn_neighbors = calculate_node_knn_neighbor(node)
+        node_knn_neighbors_dict[node] = knn_neighbors
+
+    # 2) all_nodes_info_list 很重要，所有节点的信息统一放在这个list中
+    all_nodes_info_list = init_all_nodes_info(param.node_g_weight)
+
+    # all_nodes_info_dict 便于后面从filter_node_list中通过node信息来更新到all_nodes_info_list上的信息
+    all_nodes_info_dict = {node_info.node: node_info for node_info in all_nodes_info_list}
+
+    # 按照node_r进行排序,因为论文的算法二中选择中心节点就是使用的过滤之后的节点进行筛选的
+    filter_nodes_info_list, averge_node_r = filter_corredpond_nodes(all_nodes_info_list)
+
+    # 按照节点的node_r进行排序，这里需要进行拟合
+    filter_nodes_info_list = sorted(filter_nodes_info_list, key=lambda x: x.node_r)
+
+    # 非核心逻辑，不用管
+    ascending_nod_p_nodes, ascending_nod_r_nodes = \
+        calculate_ascending_nodes(filter_nodes_info_list, all_nodes_info_list)
+
+    result.ascending_nod_p_nodes = ascending_nod_p_nodes
+    result.ascending_nod_r_nodes = ascending_nod_r_nodes
+
+    # 2) 初始化所有没有被过滤的节点的d伽马
+    init_filter_nodes_dr(filter_nodes_info_list)
+
+    # 非核心(不重要)
+    need_show_data(all_nodes_info_list, filter_nodes_info_list, need_show_image)
+
+    # 4) 选择中心节点的逻辑(重要)
+    # filter_nodes_info_list_index 表示的是过滤的节点的list的下标之后的所有节点为中心节点
+    filter_nodes_info_list_index = selec_center(filter_nodes_info_list, averge_node_r)
+    # print filter_nodes_info_list_index, len(filter_nodes_info_list)
+
+    center_node_dict = init_center_node(filter_nodes_info_list_index, filter_nodes_info_list, all_nodes_info_dict)
+    center_nodes = sorted(list(center_node_dict.keys()))
+    result.center_nodes = center_nodes
+
+    # 5) first_stpe, 将所有的非中心节点进行划分
+    # 讲道理到了这一步之后，所有的节点都是已经划分了一个社区的，然后通过second_step()进行二次划分，将重叠节点找出来，并划分
+    node_community_dict, ls_zero_nodes = first_step(center_node_dict)
+    not_overlapping_node_community_dict = node_community_dict.copy()
+
+    result.ls_zero_nodes = ls_zero_nodes
+
+    # 6) second_step, 将所有的可能是重叠节点的节点进行划分
+    not_enveloped_nodes = second_step(node_community_dict, param.c)
+    result.not_enveloped_nodes = not_enveloped_nodes
+    result.node_community_dict = node_community_dict
+
+    # 7) 下面都是一些处理结果的逻辑，不是很核心
+    # community_nodes_dict 每个社区对应的节点信息
+    community_nodes_dict, not_overlapping_community_node_dict = \
+        handle_result_to_txt(all_nodes_info_list, not_overlapping_node_community_dict)
+    result.community_nodes_dict = community_nodes_dict
+    result.not_overlapping_community_node_dict = not_overlapping_community_node_dict
+
+    find_overlapping_nodes_dict, min_om, max_om = calculate_overlapping_nodes(node_community_dict)
+    find_overlapping_nodes = list(find_overlapping_nodes_dict.keys())
+    mapping_overlapping_nodes = overlapping_mapping_sum(find_overlapping_nodes,
+                                                        result.true_overlapping_nodes)
+    result.find_overlapping_nodes = find_overlapping_nodes
+    result.mapping_overlapping_nodes = mapping_overlapping_nodes
+    result.max_om = max_om
+    result.min_om = min_om
+
+    # 在linux上直接计算onmi的值，避免手动复制计算(麻烦)
+    if run_platform == "linux":
+        from my_evaluation import calculate_onmi
+        onmi = calculate_onmi()
+        result.onmin = onmi
+
+    # 统计一下时间而已，不重要
     end_time = time.time()
-    print "程序总共花费的时间：" + str(end_time - start_time)
+    spend_seconds = end_time - start_time
+    result.spend_seconds = spend_seconds
+
+    # # 打印一些结果，供观察算法输出情况
+    # print_result(result, need_print_result)
+
+    return result, need_print_result
+
+
+def calculate_params(nodes=[], oms=[], muts=[], muws=[], cs=[], node_g_weights=[]):
+    params = []
+    for n in nodes:
+        for om in oms:
+            for mut in muts:
+                for muw in muws:
+                    for c in cs:
+                        for node_g_weight in node_g_weights:
+                            param = AlgorithmParam()
+                            param.node_g_weight = node_g_weight
+                            param.c = c
+                            param.muw = muw
+                            param.mut = mut
+                            param.om = om
+                            param.n = n
+                            param.on = n * 0.1
+                            params.append(param)
+    return params
+
+# 将算法
+def add_result_to_mysql(param, step_results=[]):
+    pass
 
 
 if __name__ == '__main__':
-    start("dolphins.gml")
+
+    dataset = "karate.gml"
+    need_show_image = False
+
+    if run_platform == "linux":
+        nodes = [1000, 5000, 1000]
+        oms = [2, 4, 6, 8]
+        muts = [0.2, 0.3]
+        muws = [0.2, 0.3]
+        cs = [0.2, 0.4, 0.6, 0.8]
+        node_g_weights = [2, 3, 4, 5]
+        params = calculate_params(nodes, oms, muts, muws, cs, node_g_weights)
+        # 每一轮执行10个迭代
+        steps = 10
+        for param in params:
+            step_results = []
+            for i in range(0, steps):
+                result, _ = start(param)
+                step_results.append(result)
+            # 将每一轮结果处理，并存入数据库中，方便后续统计
+            add_result_to_mysql(param, step_results)
+    else:
+        param = AlgorithmParam()
+        param.dataset = dataset
+        param.need_show_image = need_show_image
+        result, need_print_result = start(param)
+        print_result(result, need_print_result)

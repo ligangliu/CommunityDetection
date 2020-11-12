@@ -8,9 +8,9 @@ import networkx as nx
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from lfr_2_gml import timefn
+from my_util import timefn
 import time
-from lfr_2_gml import transfer_2_gml, path, run_platform
+from my_util import transfer_2_gml, path, run_platform
 
 # 展示x,y的二维坐标点，用于后面的数据验证
 def show_data(xmin=0, xmax=1, ymin=0, ymax=1, x=None, y=None):
@@ -29,7 +29,7 @@ def show_data(xmin=0, xmax=1, ymin=0, ymax=1, x=None, y=None):
 start_time = time.time()
 # 如果是linux环境，则自动生成网络
 if run_platform == "linux":
-    from my_onmi import generate_network
+    from my_evaluation import generate_network
     generate_network()
 
 G = nx.Graph()
@@ -741,7 +741,7 @@ print "重叠节点最多划分到的社区个数: " + str(max_overlapping_commu
 print "重叠节点最少划分到的社区个数: " + str(min_overlapping_communites)
 
 if run_platform == "linux":
-    from my_onmi import calculate_onmi
+    from my_evaluation import calculate_onmi
     print "该程序的onmi的值：" + str(calculate_onmi())
 
 end_time = time.time()
