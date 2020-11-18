@@ -59,7 +59,4 @@ def cal_EQ(partition, G):
 
 
 if __name__=='__main__':
-    pass
-    # G = nx.read_gml("../datasets/karate.gml", label="id")
-    # print cal_EQ([[12, 17, 6, 7, 10, 13, 18, 22, 5, 11, 29, 9, 20, 14, 3, 8, 2, 4, 1],
-    #               [25, 26, 27, 28, 10, 15, 16, 19, 21, 23, 31, 32, 29, 9, 24, 30, 3, 33, 34]], G)
+    G = nx.read_gml("../datasets/karate.gml", label="id")

@@ -23,7 +23,7 @@ class GN_w:
             edges_betweenness_centrality = nx.edge_betweenness_centrality(self.G)
 
             for e, ebc in edges_betweenness_centrality.items():
-                edge_weight = ebc / self.G.get_edge_data(e[0], e[1])['value']
+                edge_weight = ebc / self.G.get_edge_data(e[0], e[1])['weight']
                 edges[e] = edge_weight
 
             edge = max(edges.items(), key=lambda item: item[1])[0]
@@ -108,10 +108,11 @@ class GN_w:
 
 
 if __name__ == '__main__':
-    G = nx.read_gml('../datasets/lesmiserables.gml')
-
+    G = nx.Graph()
+    G.add_edges_from([(1, 2), (2, 3), (2, 4), (2, 5),
+                      (2, 6), (2, 7)], weight=1.0)
     algorithm = GN_w(G)
     algorithm.run()
-    algorithm.add_group()
-    algorithm.draw_Q()
-    algorithm.to_gml()
+    # algorithm.add_group()
+    # algorithm.draw_Q()
+    # algorithm.to_gml()

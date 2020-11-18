@@ -39,7 +39,7 @@ G.add_edges_from([(1, 2), (2, 3), (2, 4), (2, 5),
                   (9, 13), (9, 14), (9, 15), (9, 17), (9, 18), (9, 19), (9, 20),
                   (9, 16), (12, 13), (12, 11),
                   (12, 17), (12, 18), (12, 19), (12, 20), (12, 21), (20, 21)], weight=1.0)
-G = nx.read_gml(path+"dolphins.gml", label="id")
+G = nx.read_gml(path+"football.gml", label="id")
 for edge in G.edges:
     G[edge[0]][edge[1]]['weight'] = 1.0
 
@@ -604,8 +604,6 @@ def calculate_node_membership(nodei):
     return node_membership_dict
 
 
-# 中心节点
-center_nodes = []
 # 非包络节点
 not_enveloped_nodes = []
 
