@@ -8,14 +8,16 @@ from my_objects import AlgorithmParam
 import networkx as nx
 
 
-def generate_network(param):
-    community_path = "/app/datasets/community.nmc"
+def generate_network(param, path):
+    # community_path = "/app/datasets/community.nmc"
+    community_path = path + "/community.nmc"
     if os.path.exists(community_path):
         os.remove(community_path)
         print '*' * 30
         print "delete community.nmc success..."
         print '*' * 30
-    networkx_path = "/app/datasets/community.nse"
+    # networkx_path = "/app/datasets/community.nse"
+    networkx_path = path + "/community.nse"
     if os.path.exists(networkx_path):
         print '*' * 30
         print "delete community.nse success..."
@@ -31,23 +33,27 @@ def generate_network(param):
     muw = param.muw
     on = param.on
     om = param.om
-    args = "-N {n} -k {k} -maxk {maxk} -minc {minc} -maxc {maxc} -mut {mut} -muw {muw} -on {on}  -om {om} -name /app/datasets/community" \
-        .format(n=n, k=k, maxk=maxk, minc=minc, maxc=maxc, mut=mut, muw=muw, on=on, om=om)
+    args = "-N {n} -k {k} -maxk {maxk} -minc {minc} -maxc {maxc} -mut {mut} -muw {muw} -on {on}  -om {om} -name {name}" \
+        .format(n=n, k=k, maxk=maxk, minc=minc, maxc=maxc, mut=mut, muw=muw, on=on, om=om, name=path + "/community")
     print "generate network success..."
     commands.getoutput("/app/datasets/benchmark {args}".format(args=args))
     while not os.path.exists(community_path):
         time.sleep(1)
 
 
-def calculate_onmi():
-    res = commands.getoutput("/app/datasets/onmi/onmi /app/datasets/lfr_code.txt /app/datasets/lfr_true.txt")
+def calculate_onmi(path):
+    lfr_code = path + "/lfr_code.txt"
+    lfr_true = path + "/lfr_true.txt"
+    res = commands.getoutput("/app/datasets/onmi/onmi {} {}".format(lfr_code, lfr_true))
     lines = res.splitlines(True)
-    onmi = 0.0
+    # 取得到的ONMI最大的结果
+    onmis = []
     for line in lines:
-        if line.strip().startswith("lfk"):
+        if line.strip().__contains__("NMI"):
             onmi = float(line.strip().split("\t")[1])
+            onmis.append(onmi)
+    return max(onmis)
 
-    return onmi
 
 # 感觉此种评估的意义不大，比如karate的数据，我使用完全真实的社区结构计算模块度，也就是0.371466140697
 def cal_Q(partition, G):
@@ -149,7 +155,6 @@ if __name__ == '__main__':
 
     print cal_Q(true_paration, G)
     print nx.algorithms.community.modularity(G, true_paration)
-
 
     G = nx.read_gml("./datasets/karate.gml", label="id")
     a = "1 2 3 4 5 6 7 8 10 11 12 13 14 17 18 20 22"

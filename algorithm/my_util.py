@@ -10,8 +10,6 @@
 '''
 CREATE TABLE community_summary (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `overlapping_c` float(10) DEFAULT 0.0 COMMENT '划分重叠节点满足大于的值',
-  `node_g_weight` int(4) DEFAULT 2 COMMENT 'node_g的比重',
   `n` int(4) DEFAULT 1000 COMMENT 'lfr生成的节点个数',
   `k` int(4) DEFAULT 10 COMMENT 'lfr平均度',
   `maxk` int(4) DEFAULT 40 COMMENT 'lfr最大的度',
@@ -21,11 +19,12 @@ CREATE TABLE community_summary (
   `muw` float(10) DEFAULT 0.2 COMMENT '',
   `overlapping_size` int(4) DEFAULT 50 COMMENT '重叠节点的个数',
   `om` int(4) DEFAULT 2 COMMENT '每个重叠节点所属社区个数',
+  `overlapping_c` float(10) DEFAULT 0.0 COMMENT '划分重叠节点满足大于的值',
+  `node_g_weight` int(4) DEFAULT 2 COMMENT 'node_g的比重',
+  `u` float(10) DEFAULT 0.2 COMMENT '可能成为候选的重叠节点的个数',
   `onmi` float(10) DEFAULT 0.0 COMMENT '几轮迭代的平均onmi的值',
-  `error_community_size` float(10) DEFAULT 0.0 COMMENT '几轮迭代的社区个数的相差情况',
-  `error_overalpping_size` float(10) DEFAULT 0.0 COMMENT '几轮迭代的多发现的重叠节点个数情况',
-  `error_mapping_overalpping_size` float(10) DEFAULT 0.0 COMMENT '几轮迭代之后的每次匹配的重叠节点的个数情况',
   `average_spend_seconds` float(10) DEFAULT 0.0 COMMENT '几轮迭代之后的平均消耗时间',
+  `update_date`  TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -35,6 +34,7 @@ CREATE TABLE community_detail (
   `true_community_num` int(4) DEFAULT 0 COMMENT '真实社区的个数',
   `find_community_num` int(4) DEFAULT 0 COMMENT '算法发现的社区个数',
   `ls_zero_size` int(4) DEFAULT 0 COMMENT '到所有中心节点为0的个数',
+  `overlapping_candidates` int(4) DEFAULT 0 COMMENT '可能成为重叠节点的个数',
   `not_enveloped_size` int(4) DEFAULT 0 COMMENT '非包络节点的个数',
   `true_overlapping_size` int(4) DEFAULT 0 COMMENT '真实社区的重叠节点个数',
   `find_overalpping_size` int(4) DEFAULT 0 COMMENT '算法发现的重叠节点个数',
@@ -54,7 +54,7 @@ from functools import wraps
 import platform
 import pymysql
 import os
-import math
+import copy
 
 from my_objects import AlgorithmParam, MyResultInof
 
@@ -87,7 +87,7 @@ def timefn(fn):
 
 
 @timefn
-def transfer_2_gml(need_write_gml=False):
+def transfer_2_gml(need_write_gml=False, path=path):
     """--------------------------------------------------------------------------
     function:   将LFR的network.dat和community.dat转化为.gml文件
     parameter:
@@ -96,6 +96,7 @@ def transfer_2_gml(need_write_gml=False):
     nodes_labels = {}
     k = 0
     overlapping_node_dict = {}
+    print "path", path
     with open(path + "community.nmc", "r") as f:
         for line in f.readlines():
             items = line.strip("\r\n").split("\t")
@@ -138,6 +139,7 @@ def transfer_2_gml(need_write_gml=False):
     # print "社区的个数：" + str(len(communities))
     # print "重叠节点的个数：" + str(len(overlapping_node_dict))
     # print "重叠节点："
+    # print overlapping_node_dict.keys()
     overlapping_nodes = []
     for overlapping_node in overlapping_node_dict.keys():
         overlapping_nodes.append(int(overlapping_node))
@@ -157,8 +159,8 @@ def transfer_2_gml(need_write_gml=False):
         s = " ".join(to_join_list)
         file_handle.write(s + "\n")
     print "generate lfr_true.txt again...."
-        # print value
-        # print "---------------------------"
+    # print value
+    # print "---------------------------"
     return G, overlapping_nodes, len(communities)
 
 
@@ -180,21 +182,26 @@ def init_mysql_connection():
     return connection
 
 
+#############################################
+# 每两个变量可以生成一个图
+#
+#
+#############################################
 @timefn
-def calculate_params(nodes=[], oms=[], muws=[], cs=[], node_g_weights=[], ons=[], minc_maxcs=[]):
+def calculate_params(nodes=[], oms=[], muws=[], us=[], node_g_weights=[], ons=[], minc_maxcs=[]):
     params = []
     for n in nodes:
         for om in oms:
             for muw in muws:
-                for c in cs:
+                for u in us:
                     for node_g_weight in node_g_weights:
                         for minc_maxc in minc_maxcs:
                             for on in ons:
                                 param = AlgorithmParam()
                                 param.minc = n * minc_maxc
                                 param.maxc = n * minc_maxc + 20
+                                param.u = u
                                 param.node_g_weight = node_g_weight
-                                param.c = c
                                 param.muw = muw
                                 param.mut = muw
                                 param.om = om
@@ -204,90 +211,91 @@ def calculate_params(nodes=[], oms=[], muws=[], cs=[], node_g_weights=[], ons=[]
     return params
 
 
+def filter_step_results(step_results=[]):
+    if len(step_results) <= 1:
+        return step_results
+    step_results = sorted(step_results, key=lambda x: x.onmi)
+    steps = len(step_results)
+    if steps < 5:
+        filter_index = 1
+    else:
+        filter_index = len(step_results) * 0.2 + 1
+    return step_results[int(filter_index):]
+
+
 # 将算法结果插入到数据库中
 @timefn
-def add_result_to_mysql(param, step_results=[], summary_table="community_summary2", detail_table="community_detail2"):
+def add_result_to_mysql(param, step_results=[], summary_table="community_summary2", detail_table="community_detail2",
+                        need_add_mysql=True):
     if len(step_results) == 0 or param is None:
         return
+    isinstance(param, AlgorithmParam)
+
+    # 插入的元素不要过滤掉
+    temp_results = copy.deepcopy(step_results)
+    temp_results = sorted(temp_results, key=lambda x: x.onmi)
+
+    # 过滤掉一些元素
+    filter_results = filter_step_results(step_results)
+
     connection = init_mysql_connection()
-    insert_summary_sql = "insert into {} (overlapping_c, node_g_weight, n, k, maxk, " \
-                         "minc, maxc, mut, muw, overlapping_size, om) values ({}, {}, {}, {}, {}, {}," \
-                         " {}, {}, {}, {}, {})".format(summary_table, param.c, param.node_g_weight, param.n,
+    insert_summary_sql = "insert into {} (overlapping_c, node_g_weight, u, n, k, maxk, " \
+                         "minc, maxc, mut, muw, overlapping_size, om) values ({}, {}, {}, {}, {}, {}, {}," \
+                         " {}, {}, {}, {}, {})".format(summary_table, param.c, param.node_g_weight, param.u, param.n,
                                                        param.k, param.maxk, param.minc,
                                                        param.maxc, param.mut, param.muw, param.on, param.om)
     try:
         cursor = connection.cursor()
         cursor.execute(insert_summary_sql)
         id = connection.insert_id()
-        # sum_lg_community_size = 0.0
-        # sum_le_community_size = 0.0
-
-        sum_error_community_size_percent = 0.0  # 每次算法发现的社区个数 与 真实社区个数 的绝对差之和
-
-        # sum_lg_overlapping_nodes = 0.0
-        # sum_le_overalpping_nodes = 0.0
-        sum_error_overlapping_size_percent = 0.0  # 每次算法发现的重叠节点的个数 与 真实重叠节点的个数 的绝对差之和
-
-        # sum_mapping_overlapping_nodes = 0.0
-        sum_error_mapping_overlapping_size_percent = 0.0
 
         sum_onmi = 0.0
         sum_spend_seconds = 0.0
 
-        for step_result in step_results:
+        for step_result in filter_results:
+            # 统计onmi值
+            onmi = step_result.onmi
+            sum_onmi += onmi
+
+            # 统计算法运算时间
+            spend_seconds = step_result.spend_seconds
+            sum_spend_seconds += spend_seconds
+
+        if not need_add_mysql:
+            return sum_onmi / len(filter_results)
+
+        for step_result in temp_results:
             assert isinstance(step_result, MyResultInof)
             true_community_num = step_result.true_community_num
             find_community_num = len(step_result.center_nodes)
-            # if find_community_num > true_community_num:
-            #     sum_lg_community_size += (find_community_num - true_community_num)
-            # else:
-            #     sum_le_community_size += (true_community_num - find_community_num)
-            sum_error_community_size_percent += math.fabs(find_community_num - true_community_num) / true_community_num
 
             ls_zero_size = len(step_result.ls_zero_nodes)
+            overlapping_candidates = len(step_result.overlapping_candidates)
             not_enveloped_size = len(step_result.not_enveloped_nodes)
             true_overlapping_size = len(step_result.true_overlapping_nodes)
             find_overalpping_size = len(step_result.find_overlapping_nodes)
-            # if find_overalpping_size > true_overlapping_size:
-            #     sum_lg_overlapping_nodes += (find_overalpping_size - true_overlapping_size)
-            # else:
-            #     sum_le_overalpping_nodes += (true_overlapping_size - find_overalpping_size)
-
-            sum_error_overlapping_size_percent += math.fabs(
-                find_overalpping_size - true_community_num) / true_overlapping_size
 
             mapping_overlapping_size = len(step_result.mapping_overlapping_nodes)
-            # sum_mapping_overlapping_nodes += mapping_overlapping_size
-            sum_error_mapping_overlapping_size_percent += mapping_overlapping_size / true_overlapping_size
-
-            onmi = step_result.onmin
-            sum_onmi += onmi
 
             min_om = step_result.min_om
             max_om = step_result.max_om
 
-            spend_seconds = step_result.spend_seconds
-            sum_spend_seconds += spend_seconds
-
             insert_detail_slq = "insert into {} (community_summary_id, " \
-                                "true_community_num, find_community_num, ls_zero_size, not_enveloped_size, " \
+                                "true_community_num, find_community_num, ls_zero_size, " \
+                                "overlapping_candidates, not_enveloped_size, " \
                                 "true_overlapping_size, find_overalpping_size, " \
                                 "mapping_overlapping_size, min_om, max_om, onmi, spend_seconds) values " \
-                                "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})". \
-                format(detail_table, id, true_community_num, find_community_num, ls_zero_size,
+                                "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})". \
+                format(detail_table, id, true_community_num, find_community_num, ls_zero_size, overlapping_candidates,
                        not_enveloped_size, true_overlapping_size, find_overalpping_size,
-                       mapping_overlapping_size, min_om, max_om, onmi, spend_seconds)
+                       mapping_overlapping_size, min_om, max_om, step_result.onmi, spend_seconds)
 
             cursor.execute(insert_detail_slq)
 
-        length = len(step_results)
-        update_summary_sql = "update {} set error_community_size = {}, " \
-                             "error_overalpping_size = {}, error_mapping_overalpping_size = {}," \
-                             "average_spend_seconds = {}, onmi = {} where id = {}" \
-            .format(summary_table, sum_error_community_size_percent / length,
-                    sum_error_overlapping_size_percent / length,
-                    sum_error_mapping_overlapping_size_percent / length,
-                    sum_spend_seconds / length, sum_onmi / length, id)
+        length = len(filter_results)
+        onmi = sum_onmi / length
+        update_summary_sql = "update {} set average_spend_seconds = {}, onmi = {} where id = {}" \
+            .format(summary_table, sum_spend_seconds / length, onmi, id)
         cursor.execute(update_summary_sql)
         connection.commit()
         print "add to mysql success......."
@@ -297,6 +305,7 @@ def add_result_to_mysql(param, step_results=[], summary_table="community_summary
     finally:
         cursor.close()
         connection.close()
+        return onmi
 
 
 # 主要用于将一个集合中的所有节点进行排序，并且返回一个只包含空格的字符串(因为计算onmi的时候是这种各式)
@@ -328,6 +337,7 @@ def print_result(result, need_print):
     print "find communities: " + str(len(result.center_nodes))
     print "center nodes: " + str(result.center_nodes)
     print "not enveloped nodes: " + str(result.not_enveloped_nodes)
+    print "overalpping candidates nodes: " + str(result.overlapping_candidates)
     print "ls ero nodes: " + str(result.ls_zero_nodes)
     print '-' * 30
     print

@@ -188,8 +188,12 @@ def node_to_edge_dict_to_networkx(node_to_edge_dict, paritions):
 
 if __name__ == '__main__':
     G = nx.Graph()
-    G.add_edges_from([(1, 2), (2, 3), (2, 4), (2, 5),
-                      (2, 6), (2, 7)], weight=1.0)
+    G.add_edges_from([(1, 2), (1, 3), (1, 4), (1, 5),
+                      (2, 3), (2, 4), (2, 5), (3, 4),
+                      (3, 5), (4, 5),
+                      (5, 6), (6, 7), (6, 8), (6, 9), (6, 10),
+                      (7, 8), (7, 9), (7, 10), (8, 9),
+                      (8, 10), (9, 10)], weight=1.0)
     # G = nx.read_gml("./datasets/karate.gml", label="id")
     def clone_graph(G):
         cloned_g = nx.Graph()
